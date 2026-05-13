@@ -1,0 +1,22 @@
+# Dependências
+node_modules/
+
+# Build
+dist/
+
+# Logs
+*.log
+
+# Ambiente e secrets — NUNCA commitar
+.secrets
+.env.local
+.env.production
+*.pem
+*.key
+
+# VSCode
+.vscode/settings.json
+.vscode/launch.json
+
+# Package
+*.vsix

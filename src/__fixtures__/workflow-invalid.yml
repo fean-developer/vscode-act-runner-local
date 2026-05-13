@@ -1,0 +1,8 @@
+# YAML inválido — faltam campos obrigatórios
+name: Workflow Inválido
+on: push
+jobs:
+  build:
+    # runs-on ausente intencionalmente para testar validação
+    steps:
+      - name: Sem run nem uses

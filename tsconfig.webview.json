@@ -1,0 +1,24 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "ES2022",
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM"],
+    "jsx": "react-jsx",
+    "outDir": "./dist/webview",
+    "rootDir": "./src",
+    "moduleResolution": "bundler"
+  },
+  "include": [
+    "src/webview/**/*.ts",
+    "src/webview/**/*.tsx",
+    "src/types/**/*.ts"
+  ],
+  "exclude": [
+    "src/core/**",
+    "src/providers/**",
+    "src/extension.ts",
+    "node_modules",
+    "dist"
+  ]
+}

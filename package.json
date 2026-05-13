@@ -1,0 +1,301 @@
+{
+  "name": "act-visual-runner",
+  "displayName": "Act Visual Runner",
+  "description": "Execute GitHub Actions localmente com interface visual estilo n8n usando nektos/act",
+  "version": "0.1.0",
+  "publisher": "act-visual-runner",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "github-actions",
+    "act",
+    "workflow",
+    "ci",
+    "cd"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "actRunner.showMenu",
+        "title": "Act: Abrir Menu Principal"
+      },
+      {
+        "command": "actRunner.runWorkflow",
+        "title": "Act: Executar Workflow",
+        "icon": "$(run)"
+      },
+      {
+        "command": "actRunner.quickRun",
+        "title": "Act: Quick Run"
+      },
+      {
+        "command": "actRunner.runJob",
+        "title": "Act: Executar Job",
+        "icon": "$(run)"
+      },
+      {
+        "command": "actRunner.listJobs",
+        "title": "Act: Listar Jobs"
+      },
+      {
+        "command": "actRunner.dryRun",
+        "title": "Act: Dry Run",
+        "icon": "$(eye)"
+      },
+      {
+        "command": "actRunner.stopExecution",
+        "title": "Act: Parar Execução"
+      },
+      {
+        "command": "actRunner.forceReset",
+        "title": "Act: Resetar Estado (forçar)"
+      },
+      {
+        "command": "actRunner.validateWorkflow",
+        "title": "Act: Validar Workflow",
+        "icon": "$(check)"
+      },
+      {
+        "command": "actRunner.manageEnv",
+        "title": "Act: Gerenciar Variáveis de Ambiente"
+      },
+      {
+        "command": "actRunner.simulateWebhook",
+        "title": "Act: Simular Webhook"
+      },
+      {
+        "command": "actRunner.viewHistory",
+        "title": "Act: Ver Histórico"
+      },
+      {
+        "command": "actRunner.createWorkflow",
+        "title": "Act: Criar Novo Workflow"
+      },
+      {
+        "command": "actRunner.createScript",
+        "title": "Act: Gerar Script"
+      },
+      {
+        "command": "actRunner.dockerGuide",
+        "title": "Act: Guia Alternativas Docker"
+      },
+      {
+        "command": "actRunner.securityGuide",
+        "title": "Act: Boas Práticas de Segurança"
+      },
+      {
+        "command": "actRunner.configure",
+        "title": "Act: Configurar (.actrc / .secrets)"
+      },
+      {
+        "command": "actRunner.refreshExplorer",
+        "title": "Act: Atualizar Explorador",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "actRunner.selectProject",
+        "title": "Act: Selecionar Projeto",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "actRunner.locateAct",
+        "title": "Act: Localizar Executável do act",
+        "icon": "$(search)"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "actRunner",
+          "title": "Act Runner",
+          "icon": "$(play-circle)"
+        }
+      ]
+    },
+    "views": {
+      "actRunner": [
+        {
+          "id": "actRunner.workflowExplorer",
+          "name": "Workflows"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "actRunner.refreshExplorer",
+          "when": "view == actRunner.workflowExplorer",
+          "group": "navigation@3"
+        },
+        {
+          "command": "actRunner.selectProject",
+          "when": "view == actRunner.workflowExplorer",
+          "group": "navigation@1"
+        },
+        {
+          "command": "actRunner.locateAct",
+          "when": "view == actRunner.workflowExplorer",
+          "group": "navigation@2"
+        },
+        {
+          "command": "actRunner.runWorkflow",
+          "when": "view == actRunner.workflowExplorer",
+          "group": "navigation@4"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "actRunner.runWorkflow",
+          "when": "viewItem == workflow",
+          "group": "inline@1"
+        },
+        {
+          "command": "actRunner.dryRun",
+          "when": "viewItem == workflow",
+          "group": "inline@2"
+        },
+        {
+          "command": "actRunner.validateWorkflow",
+          "when": "viewItem == workflow",
+          "group": "inline@3"
+        },
+        {
+          "command": "actRunner.runJob",
+          "when": "viewItem == job",
+          "group": "inline@1"
+        },
+        {
+          "command": "actRunner.runWorkflow",
+          "when": "viewItem == workflow",
+          "group": "1_run@1"
+        },
+        {
+          "command": "actRunner.dryRun",
+          "when": "viewItem == workflow",
+          "group": "1_run@2"
+        },
+        {
+          "command": "actRunner.validateWorkflow",
+          "when": "viewItem == workflow",
+          "group": "1_run@3"
+        },
+        {
+          "command": "actRunner.runJob",
+          "when": "viewItem == job",
+          "group": "1_run@1"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "actRunner.showMenu"
+        },
+        {
+          "command": "actRunner.runWorkflow"
+        },
+        {
+          "command": "actRunner.quickRun"
+        },
+        {
+          "command": "actRunner.dryRun"
+        },
+        {
+          "command": "actRunner.validateWorkflow"
+        },
+        {
+          "command": "actRunner.viewHistory"
+        },
+        {
+          "command": "actRunner.dockerGuide"
+        },
+        {
+          "command": "actRunner.securityGuide"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Act Visual Runner",
+      "properties": {
+        "actRunner.actPath": {
+          "type": "string",
+          "default": "act",
+          "description": "Caminho para o executável do act (deixe 'act' se estiver no PATH)"
+        },
+        "actRunner.defaultImage": {
+          "type": "string",
+          "default": "catthehacker/ubuntu:act-latest",
+          "description": "Imagem Docker padrão para execução local"
+        },
+        "actRunner.enableCodeLens": {
+          "type": "boolean",
+          "default": true,
+          "description": "Exibir botões CodeLens nos arquivos de workflow YAML"
+        },
+        "actRunner.maxHistoryRecords": {
+          "type": "number",
+          "default": 100,
+          "description": "Número máximo de registros no histórico de execuções"
+        },
+        "actRunner.secretsFile": {
+          "type": "string",
+          "default": ".secrets",
+          "description": "Caminho para o arquivo de secrets (relativo ao workspace)"
+        },
+        "actRunner.envFile": {
+          "type": "string",
+          "default": ".env",
+          "description": "Caminho para o arquivo de variáveis de ambiente (relativo ao workspace)"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run build",
+    "build": "webpack --mode production --config webpack.extension.config.js && webpack --mode production --config webpack.webview.config.js",
+    "watch": "webpack --mode development --watch --config webpack.extension.config.js",
+    "watch:webview": "webpack --mode development --watch --config webpack.webview.config.js",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "lint": "eslint src --ext .ts,.tsx",
+    "lint:fix": "eslint src --ext .ts,.tsx --fix",
+    "typecheck": "tsc --noEmit && tsc --noEmit --project tsconfig.webview.json",
+    "package": "vsce package",
+    "clean": "rm -rf dist"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.14",
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^20.19.41",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "@types/vscode": "^1.85.0",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "@xyflow/react": "^12.0.0",
+    "css-loader": "^6.10.0",
+    "eslint": "^8.57.0",
+    "jest": "^29.7.0",
+    "jest-environment-jsdom": "^29.7.0",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0",
+    "style-loader": "^3.3.4",
+    "ts-jest": "^29.1.0",
+    "ts-loader": "^9.5.1",
+    "typescript": "^5.4.0",
+    "webpack": "^5.91.0",
+    "webpack-cli": "^5.1.4",
+    "zustand": "^4.5.0"
+  },
+  "dependencies": {
+    "js-yaml": "^4.1.1",
+    "zod": "^3.25.76"
+  }
+}
