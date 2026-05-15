@@ -17,7 +17,7 @@ Extensão VSCode que executa workflows GitHub Actions localmente usando [nektos/
 A finalidade dessa extensão é transformar a experiência de testar GitHub Actions localmente, oferecendo uma interface visual intuitiva e em tempo real que torna o desenvolvimento mais produtivo e satisfatório.
 
 > [!IMPORTANT]
-> Essa estensao executa somente com [nektos/act](https://github.com/nektos/act) instalado
+> Essa extensao executa somente com oa tool [nektos/act](https://github.com/nektos/act) instalado localmente
 
 ## Pré-requisitos obrigatórios
 
