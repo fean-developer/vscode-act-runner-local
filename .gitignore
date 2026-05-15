@@ -21,3 +21,8 @@ dist/
 .env.*
 .env
 
+
+# Act Runner — secrets locais
+.env.local
+.env.production
+.github/**
