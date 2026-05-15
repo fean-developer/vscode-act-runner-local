@@ -52,4 +52,5 @@ export interface ExecutionOptions {
   trigger?: ExecutionTrigger;
   workspaceRoot?: string;  // pasta raiz do projeto (sobrepõe workspace do VSCode)
   actCwd?: string;         // diretório de trabalho do act (para reusable workflows fora do projeto)
+  workflowName?: string;   // nome display do workflow (para strip do prefixo nos brackets do act)
 }

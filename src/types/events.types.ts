@@ -18,6 +18,8 @@ export interface JobUpdatePayload {
   status: JobStatus;
   startedAt?: string;
   completedAt?: string;
+  /** Presente apenas para inner jobs de reusable workflows (3-level bracket) */
+  outerJobId?: string;
 }
 
 export interface StepUpdatePayload {
@@ -75,8 +77,12 @@ export type WebviewMessage =
 
 // Comandos enviados da Webview para o Extension Host
 export type WebviewCommand =
-  | { type: 'command:run';      payload: { workflowPath: string; jobId?: string; dryRun?: boolean } }
-  | { type: 'command:quickRun'; payload: { workflowPath: string } }
-  | { type: 'command:stop';     payload: { executionId: string } }
-  | { type: 'command:rerun';    payload: { executionId: string } }
-  | { type: 'state:request';    payload: Record<string, never> };
+  | { type: 'command:run';       payload: { workflowPath: string; jobId?: string; dryRun?: boolean } }
+  | { type: 'command:quickRun';  payload: { workflowPath: string } }
+  | { type: 'command:stop';      payload: { executionId: string } }
+  | { type: 'command:rerun';     payload: { executionId: string } }
+  | { type: 'command:locateAct'; payload: Record<string, never> }
+  | { type: 'command:loadEnv';      payload: { tab: string } }
+  | { type: 'command:saveEnv';      payload: { tab: string; rows: { key: string; value: string }[] } }
+  | { type: 'command:deleteHistory'; payload: { executionId: string } }
+  | { type: 'state:request';        payload: Record<string, never> };

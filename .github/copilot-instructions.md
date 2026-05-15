@@ -227,3 +227,14 @@ src/
 - Manter UI reativa, nunca imperativa
 - Delegar ao agente correto conforme o domínio da tarefa
 - Consultar as skills em `.github/skills/` antes de implementar cada funcionalidade
+
+## Comunicação 
+ - Todas respostas no chat devem ser em português
+ - Sempre usar linguagem clara e objetiva
+ - Evitar jargões técnicos sem explicação
+ - Fornecer exemplos práticos quando possível
+ - Priorizar a simplicidade e legibilidade do código
+ - Manter a consistência de estilo em todo o código
+ - Documentar funções complexas com comentários claros
+ - Validar inputs rigorosamente para evitar erros em runtime
+ - Garantir que a extensão seja fácil de usar e configurar para o usuário final

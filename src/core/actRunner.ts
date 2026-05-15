@@ -17,8 +17,20 @@ const ACT_CANDIDATE_PATHS: string[] = [
   '/home/linuxbrew/.linuxbrew/bin/act',             // Linuxbrew
 ];
 
-const ANSI_RE = /\x1B\[[0-9;]*[mGKHFJK]/g;
-const strip = (s: string) => s.replace(ANSI_RE, '');
+const ANSI_RE = /\x1B[\[\]()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><~]/g;
+const strip = (s: string) => s.replace(ANSI_RE, '').replace(/\r/g, '');
+
+// Output channel visível em "Output > Act Visual Runner"
+let _outputChannel: vscode.OutputChannel | undefined;
+function getOutputChannel(): vscode.OutputChannel {
+  if (!_outputChannel) {
+    _outputChannel = vscode.window.createOutputChannel('Act Visual Runner');
+  }
+  return _outputChannel;
+}
+function actLog(msg: string): void {
+  getOutputChannel().appendLine(msg);
+}
 
 // Padrões de output do act CLI
 const RE_STEP_START   = /^\[([^\]]+)\]\s+⭐\s+Run\s+(.+)$/;
@@ -26,15 +38,41 @@ const RE_STEP_OK      = /^\[([^\]]+)\]\s+✅\s+Success\s+-\s+(.+)$/;
 const RE_STEP_FAIL    = /^\[([^\]]+)\]\s+❌\s+Failure\s+-\s+(.+)$/;
 const RE_STEP_SKIP    = /^\[([^\]]+)\]\s+⏭️\s+Skipping\s+(.+)$/;
 const RE_LOG_LINE     = /^\[([^\]]+)\]\s+\|\s*(.*)$/;
-const RE_JOB_START    = /^\[([^\]]+)\]\s+🚀\s+Start\s+image/;
-const RE_JOB_OK       = /^\[([^\]]+)\]\s+Job\s+succeeded$/;
-const RE_JOB_FAIL     = /^\[([^\]]+)\]\s+Job\s+failed$/;
+const RE_JOB_START    = /^\[([^\]]+)\]\s+(?:🚀|🐳)\s+Start(?:\s+image)?/;
+// Accept plain, 🐳/🚀 (docker/start) and 🏁 (racing flag used by act for sub-job completion)
+const RE_JOB_OK       = /^\[([^\]]+)\]\s+(?:[🐳🚀🏁]\s+)?(?:✅\s+)?Job\s+succeeded/u;
+const RE_JOB_FAIL     = /^\[([^\]]+)\]\s+(?:[🐳🚀🏁]\s+)?(?:❌\s+)?Job\s+failed/u;
+// Any bracket-prefixed line — used to detect outer-job transitions
+const RE_ANY_BRACKET  = /^\[([^\]]+)\]/;
 
 function parseJobStep(bracket: string): { jobId: string; stepId: string } {
-  const slash = bracket.lastIndexOf('/');
+  const slash = bracket.indexOf('/');
   if (slash < 0) return { jobId: bracket.trim(), stepId: 'unknown' };
   return { jobId: bracket.slice(0, slash).trim(), stepId: bracket.slice(slash + 1).trim() };
 }
+
+/**
+ * Para brackets de reusable workflows (3 partes: OuterJob/ReusableWorkflow/InnerJob),
+ * retorna o InnerJob como effectiveJobId (é o job que "possui" o step/log).
+ * Para brackets normais (2 partes: Job/StepName), retorna OuterJob como effectiveJobId.
+ */
+function parseEffectiveBracket(bracket: string): {
+  outerJobId: string;      // Usado para lifecycle tracking do job externo
+  effectiveJobId: string;  // Inner job para reusable, outer job para regular
+  isReusable: boolean;
+} {
+  const parts = bracket.split('/');
+  const outerJobId = parts[0].trim();
+  if (parts.length >= 3) {
+    // [OuterJob/ReusableWorkflowName/InnerJobId]
+    return { outerJobId, effectiveJobId: parts[parts.length - 1].trim(), isReusable: true };
+  }
+  return { outerJobId, effectiveJobId: outerJobId, isReusable: false };
+}
+
+/** Remove sufixos de timing do act, ex: " [52.52743ms]" ou " [1.2s]" */
+const RE_TIMING_SUFFIX = /\s+\[\d+(?:\.\d+)?(?:ns|µs|ms|s)?\]$/;
+const stripTiming = (s: string): string => s.replace(RE_TIMING_SUFFIX, '');
 
 function sanitizeArg(arg: string): string {
   return arg.replace(/[;&|`$<>()\[\]{}\\'"]/g, '');
@@ -44,8 +82,58 @@ function sanitizePath(p: string): string {
   return p.replace(/[;&|`$<>()\[\]{}\\"']/g, '');
 }
 
+interface PendingJobStatus {
+  status: 'success' | 'failed';
+  completedAt: string;
+}
+
 export class ActRunner {
   private activeProcess: ChildProcess | null = null;
+  /**
+   * Pending job status: when act emits "🏁 Job succeeded" at sub-job level we can't
+   * confirm the outer job is done immediately — it might have more sequential sub-jobs.
+   * We confirm only when the next line belongs to a DIFFERENT outer job, or at execution end.
+   */
+  private pendingJobStatus = new Map<string, PendingJobStatus>();
+  /**
+   * Outer jobs already marked as "running" in this execution.
+   * Avoids redundant dispatches when every bracket line would re-trigger.
+   */
+  private runningJobs = new Set<string>();
+
+  /** Log lines acumulados da execução atual (para persistência no logSummary) */
+  private accumulatedLogs: string[] = [];
+
+  /**
+   * Último outer job visto — usado para inferir conclusão do outer job
+   * quando act não emite [OuterJob] 🏁 Job succeeded para reusable workflows.
+   */
+  private lastOuterJobId: string | null = null;
+
+  /**
+   * Outer jobs cujos inner jobs tiveram falha — usado para inferir status
+   * 'failed' ao fechar o outer job implicitamente.
+   */
+  private failedInnerByOuter = new Set<string>();
+
+  /**
+   * Nome display do workflow em execução (ex: "CI/CD Pipeline (Local – Consolidated)").
+   * Act prefixa todos os brackets com [WorkflowName/...], então removemos esse prefixo
+   * antes de parsear os brackets para evitar falsos "outer jobs" (ex: "CI" de "CI/CD Pipeline").
+   */
+  private workflowDisplayName: string | null = null;
+
+  /**
+   * Step atualmente ativo por effectiveJobId.
+   * Usado para atribuir jobId/stepId corretos a linhas de log que não carregam
+   * o nome do step no bracket (apenas o nome do job).
+   */
+  private currentStep = new Map<string, string>(); // effectiveJobId → stepName
+
+  /** Retorna os logs acumulados da última execução */
+  getLogs(): string[] {
+    return [...this.accumulatedLogs];
+  }
 
   /** Testa se um caminho/comando executa act corretamente */
   async isActInstalled(actPath = 'act'): Promise<boolean> {
@@ -129,6 +217,15 @@ export class ActRunner {
 
     const args = this.buildArgs(options, defaultImage, actCwd);
 
+    this.pendingJobStatus.clear();
+    this.runningJobs.clear();
+    this.accumulatedLogs = [];
+    this.currentStep.clear();
+    this.lastOuterJobId = null;
+    this.failedInnerByOuter.clear();
+    this.workflowDisplayName = options.workflowName ?? null;
+    // Limpar containers act-* órfãos de execuções anteriores antes de iniciar
+    await this.cleanupActContainers();
     return new Promise((resolve, reject) => {
       this.activeProcess = spawn(actPath, args, {
         cwd: actCwd,
@@ -146,6 +243,7 @@ export class ActRunner {
         chunk.toString().split('\n').forEach((line: string) => {
           const clean = strip(line);
           if (clean.trim()) {
+            this.accumulatedLogs.push(clean);
             eventBus.dispatch({
               type: 'log',
               payload: { executionId, line: clean, level: 'error', timestamp: now() },
@@ -156,6 +254,14 @@ export class ActRunner {
 
       this.activeProcess.on('close', (code: number | null) => {
         this.activeProcess = null;
+        const finalJobStatus: 'success' | 'failed' = code === 0 ? 'success' : 'failed';
+        // Flush any pending job status before execution:end so nodes reflect
+        // their individual status (not just the global fallback)
+        for (const [pendingJobId, pending] of this.pendingJobStatus) {
+          actLog(`[act-runner] job:${pending.status} (flush on close) → jobId="${pendingJobId}"`);
+          eventBus.dispatch({ type: 'job:update', payload: { executionId, jobId: pendingJobId, jobName: pendingJobId, status: finalJobStatus, completedAt: pending.completedAt } });
+        }
+        this.pendingJobStatus.clear();
         eventBus.dispatch({
           type: 'execution:end',
           payload: {
@@ -165,6 +271,8 @@ export class ActRunner {
             completedAt: now(),
           },
         });
+        // Limpar imagens dangling após execução (criadas como camadas intermediárias)
+        this.cleanupDanglingImages().catch(() => { /* silencioso */ });
         if (code === 0) resolve();
         else reject(new Error(`act encerrou com código ${code}`));
       });
@@ -178,54 +286,228 @@ export class ActRunner {
   }
 
   stop(): void {
+    this.pendingJobStatus.clear();
+    this.runningJobs.clear();
+    this.currentStep.clear();
+    this.lastOuterJobId = null;
+    this.failedInnerByOuter.clear();
     this.activeProcess?.kill('SIGTERM');
     this.activeProcess = null;
+    // Limpar containers act-* que ficaram ativos após o kill
+    this.cleanupActContainers()
+      .then(() => this.cleanupDanglingImages())
+      .catch(() => { /* silencioso */ });
+  }
+
+  clearLogs(): void {
+    this.accumulatedLogs = [];
+  }
+
+  /**
+   * Remove todos os containers Docker cujo nome começa com "act-".
+   * Chamado em stop() e antes de cada run() para garantir que containers
+   * órfãos de execuções anteriores não acumulem.
+   */
+  private cleanupActContainers(): Promise<void> {
+    return new Promise((resolve) => {
+      // Busca IDs de containers em execução cujo nome começa com "act-"
+      const find = spawn('docker', ['ps', '-q', '--filter', 'name=act-'], {
+        stdio: ['ignore', 'pipe', 'ignore'],
+      });
+      let ids = '';
+      find.stdout?.on('data', (chunk: Buffer) => { ids += chunk.toString(); });
+      find.on('error', () => resolve()); // docker não instalado ou indisponível
+      find.on('close', () => {
+        const containerIds = ids.trim().split('\n').filter(Boolean);
+        if (containerIds.length === 0) { resolve(); return; }
+        actLog(`[act-runner] limpando ${containerIds.length} container(s) act-* residual(is)`);
+        const rm = spawn('docker', ['rm', '-f', ...containerIds], { stdio: 'ignore' });
+        rm.on('close', () => resolve());
+        rm.on('error', () => resolve());
+      });
+    });
+  }
+
+  /**
+   * Remove imagens Docker dangling (sem tag e sem uso) geradas como camadas
+   * intermediárias durante o build do pipeline.
+   * Equivalente a: docker image prune -f
+   */
+  private cleanupDanglingImages(): Promise<void> {
+    return new Promise((resolve) => {
+      actLog('[act-runner] prunando imagens dangling...');
+      const prune = spawn('docker', ['image', 'prune', '-f'], { stdio: 'ignore' });
+      prune.on('close', () => resolve());
+      prune.on('error', () => resolve()); // docker não disponível
+    });
+  }
+
+  /**
+   * Remove o prefixo do nome do workflow dos brackets do act.
+   * Act emite: [WorkflowDisplayName/JobName] content
+   * Após strip: [JobName] content
+   * Isso evita que o workflow name seja confundido com um outer job
+   * (ex: "CI" de "CI/CD Pipeline" sendo interpretado como job pai).
+   */
+  private stripWorkflowPrefix(line: string): string {
+    if (!this.workflowDisplayName) return line;
+    const prefix = '[' + this.workflowDisplayName + '/';
+    if (line.startsWith(prefix)) {
+      return '[' + line.slice(prefix.length);
+    }
+    return line;
   }
 
   private processLine(executionId: string, raw: string): void {
     const clean = strip(raw);
+    if (!clean.trim()) return;
+
+    // Log every line to the output channel for visibility / debugging
+    actLog(clean);
+
+    // Remover prefixo do workflow name para parsear brackets corretamente
+    // Act v2 prefixa todos os brackets com: [WorkflowDisplayName/JobName]
+    // Para workflows com "/" no nome (ex: "CI/CD Pipeline"), isso causaria falsos outer jobs.
+    const cleanForParsing = this.stripWorkflowPrefix(clean);
+
     let m: RegExpMatchArray | null;
 
-    if ((m = clean.match(RE_STEP_START))) {
-      const { jobId, stepId } = parseJobStep(m[1]);
-      eventBus.dispatch({ type: 'step:update', payload: { executionId, jobId, stepId, stepName: m[2].trim(), status: 'running', startedAt: now() } });
+    // ── Outer-job lifecycle tracking ────────────────────────────────────────
+    // Any bracketed line tells us which outer job is active.
+    // - First appearance  → mark it as "running" (works for ALL act output formats)
+    // - Pending resolve   → confirm/cancel pending status based on outer-job change
+    const bracketM = cleanForParsing.match(RE_ANY_BRACKET);
+    if (bracketM) {
+      const { outerJobId: currentOuterJobId, effectiveJobId: currentEffectiveJobId, isReusable } = parseEffectiveBracket(bracketM[1]);
+
+      // Mark outer job as running on first bracket line seen for that job
+      if (!this.runningJobs.has(currentOuterJobId)) {
+        // Quando um NOVO outer job aparece pela primeira vez, o anterior já terminou.
+        // Act não emite [OuterJob] 🏁 Job succeeded para callers de reusable workflows,
+        // então inferimos a conclusão aqui.
+        if (this.lastOuterJobId && this.lastOuterJobId !== currentOuterJobId) {
+          const prevId = this.lastOuterJobId;
+          if (!this.pendingJobStatus.has(prevId)) {
+            const inferredStatus = this.failedInnerByOuter.has(prevId) ? 'failed' : 'success';
+            actLog(`[act-runner] outer job:${inferredStatus} (inferred on transition) → jobId="${prevId}"`);
+            eventBus.dispatch({ type: 'job:update', payload: { executionId, jobId: prevId, jobName: prevId, status: inferredStatus, completedAt: now() } });
+          }
+        }
+        this.lastOuterJobId = currentOuterJobId;
+        this.runningJobs.add(currentOuterJobId);
+        actLog(`[act-runner] job:running (first bracket) → jobId="${currentOuterJobId}"`);
+        eventBus.dispatch({ type: 'job:update', payload: { executionId, jobId: currentOuterJobId, jobName: currentOuterJobId, status: 'running', startedAt: now() } });
+      } else {
+        // Atualiza o outer job mais recentemente visto (mesmo que já visto antes)
+        this.lastOuterJobId = currentOuterJobId;
+      }
+      // Para reusables, também marcar o inner job como running na primeira aparição
+      if (isReusable && !this.runningJobs.has(currentEffectiveJobId)) {
+        this.runningJobs.add(currentEffectiveJobId);
+        actLog(`[act-runner] inner job:running (first bracket) → jobId="${currentEffectiveJobId}"`);
+        eventBus.dispatch({ type: 'job:update', payload: { executionId, jobId: currentEffectiveJobId, jobName: currentEffectiveJobId, outerJobId: currentOuterJobId, status: 'running', startedAt: now() } });
+      }
+
+      // Pending confirmation: confirm/cancel based on outer-job change
+      if (this.pendingJobStatus.size > 0) {
+        for (const [pendingJobId, pending] of this.pendingJobStatus) {
+          if (pendingJobId !== currentOuterJobId) {
+            // Outer job changed → confirm the pending job as done
+            actLog(`[act-runner] job:${pending.status} (confirmed, outer changed) → jobId="${pendingJobId}"`);
+            eventBus.dispatch({ type: 'job:update', payload: { executionId, jobId: pendingJobId, jobName: pendingJobId, status: pending.status, completedAt: pending.completedAt } });
+            this.pendingJobStatus.delete(pendingJobId);
+          } else {
+            // Same outer job still has work → cancel pending (more sub-jobs running)
+            actLog(`[act-runner] job:pending cancelled (same outer job active) → jobId="${pendingJobId}"`);
+            this.pendingJobStatus.delete(pendingJobId);
+          }
+        }
+      }
+    }
+    // ───────────────────────────────────────────────────────────────────────
+
+    if ((m = cleanForParsing.match(RE_STEP_START))) {
+      const { outerJobId, effectiveJobId, isReusable } = parseEffectiveBracket(m[1]);
+      const stepName = m[2].trim();
+      this.currentStep.set(effectiveJobId, stepName);
+      eventBus.dispatch({ type: 'job:update', payload: { executionId, jobId: effectiveJobId, jobName: effectiveJobId, outerJobId: isReusable ? outerJobId : undefined, status: 'running', startedAt: now() } });
+      eventBus.dispatch({ type: 'step:update', payload: { executionId, jobId: effectiveJobId, stepId: stepName, stepName, status: 'running', startedAt: now() } });
       return;
     }
-    if ((m = clean.match(RE_STEP_OK))) {
-      const { jobId, stepId } = parseJobStep(m[1]);
-      eventBus.dispatch({ type: 'step:update', payload: { executionId, jobId, stepId, stepName: m[2].trim(), status: 'success', completedAt: now() } });
+    if ((m = cleanForParsing.match(RE_STEP_OK))) {
+      const { effectiveJobId } = parseEffectiveBracket(m[1]);
+      const stepName = stripTiming(m[2].trim()); // remove sufixo de timing: "Name [52ms]" → "Name"
+      this.currentStep.delete(effectiveJobId);
+      eventBus.dispatch({ type: 'step:update', payload: { executionId, jobId: effectiveJobId, stepId: stepName, stepName, status: 'success', completedAt: now() } });
       return;
     }
-    if ((m = clean.match(RE_STEP_FAIL))) {
-      const { jobId, stepId } = parseJobStep(m[1]);
-      eventBus.dispatch({ type: 'step:update', payload: { executionId, jobId, stepId, stepName: m[2].trim(), status: 'failed', completedAt: now() } });
+    if ((m = cleanForParsing.match(RE_STEP_FAIL))) {
+      const { effectiveJobId } = parseEffectiveBracket(m[1]);
+      const stepName = stripTiming(m[2].trim());
+      this.currentStep.delete(effectiveJobId);
+      eventBus.dispatch({ type: 'step:update', payload: { executionId, jobId: effectiveJobId, stepId: stepName, stepName, status: 'failed', completedAt: now() } });
       return;
     }
-    if ((m = clean.match(RE_STEP_SKIP))) {
-      const { jobId, stepId } = parseJobStep(m[1]);
-      eventBus.dispatch({ type: 'step:update', payload: { executionId, jobId, stepId, stepName: m[2].trim(), status: 'skipped', completedAt: now() } });
+    if ((m = cleanForParsing.match(RE_STEP_SKIP))) {
+      const { effectiveJobId } = parseEffectiveBracket(m[1]);
+      const stepName = stripTiming(m[2].trim());
+      this.currentStep.delete(effectiveJobId);
+      eventBus.dispatch({ type: 'step:update', payload: { executionId, jobId: effectiveJobId, stepId: stepName, stepName, status: 'skipped', completedAt: now() } });
       return;
     }
-    if ((m = clean.match(RE_JOB_START))) {
-      eventBus.dispatch({ type: 'job:update', payload: { executionId, jobId: m[1].trim(), jobName: m[1].trim(), status: 'running', startedAt: now() } });
+    if ((m = cleanForParsing.match(RE_JOB_START))) {
+      const { outerJobId, effectiveJobId, isReusable } = parseEffectiveBracket(m[1]);
+      actLog(`[act-runner] job:running → jobId="${effectiveJobId}"`);
+      eventBus.dispatch({ type: 'job:update', payload: { executionId, jobId: effectiveJobId, jobName: effectiveJobId, outerJobId: isReusable ? outerJobId : undefined, status: 'running', startedAt: now() } });
       return;
     }
-    if ((m = clean.match(RE_JOB_OK))) {
-      eventBus.dispatch({ type: 'job:update', payload: { executionId, jobId: m[1].trim(), jobName: m[1].trim(), status: 'success', completedAt: now() } });
+    if ((m = cleanForParsing.match(RE_JOB_OK))) {
+      const { outerJobId, effectiveJobId, isReusable } = parseEffectiveBracket(m[1]);
+      if (isReusable) {
+        actLog(`[act-runner] inner job:success → jobId="${effectiveJobId}"`);
+        eventBus.dispatch({ type: 'job:update', payload: { executionId, jobId: effectiveJobId, jobName: effectiveJobId, outerJobId, status: 'success', completedAt: now() } });
+      } else {
+        actLog(`[act-runner] job:success (pending) → jobId="${outerJobId}"`);
+        this.pendingJobStatus.set(outerJobId, { status: 'success', completedAt: now() });
+      }
       return;
     }
-    if ((m = clean.match(RE_JOB_FAIL))) {
-      eventBus.dispatch({ type: 'job:update', payload: { executionId, jobId: m[1].trim(), jobName: m[1].trim(), status: 'failed', completedAt: now() } });
+    if ((m = cleanForParsing.match(RE_JOB_FAIL))) {
+      const { outerJobId, effectiveJobId, isReusable } = parseEffectiveBracket(m[1]);
+      if (isReusable) {
+        actLog(`[act-runner] inner job:failed → jobId="${effectiveJobId}"`);
+        this.failedInnerByOuter.add(outerJobId); // registrar falha para inferir status do outer
+        eventBus.dispatch({ type: 'job:update', payload: { executionId, jobId: effectiveJobId, jobName: effectiveJobId, outerJobId, status: 'failed', completedAt: now() } });
+      } else {
+        actLog(`[act-runner] job:failed (pending) → jobId="${outerJobId}"`);
+        this.pendingJobStatus.set(outerJobId, { status: 'failed', completedAt: now() });
+      }
       return;
     }
-    if ((m = clean.match(RE_LOG_LINE))) {
-      const { jobId, stepId } = parseJobStep(m[1]);
-      eventBus.dispatch({ type: 'log', payload: { executionId, jobId, stepId, line: m[2], level: 'info', timestamp: now() } });
+    if ((m = cleanForParsing.match(RE_LOG_LINE))) {
+      // Formato: [bracket] | content
+      const { effectiveJobId } = parseEffectiveBracket(m[1]);
+      const stepId = this.currentStep.get(effectiveJobId) ?? effectiveJobId;
+      this.accumulatedLogs.push(m[2]);
+      eventBus.dispatch({ type: 'log', payload: { executionId, jobId: effectiveJobId, stepId, line: m[2], level: 'info', timestamp: now() } });
       return;
     }
-    if (clean.trim()) {
-      eventBus.dispatch({ type: 'log', payload: { executionId, line: clean, level: 'info', timestamp: now() } });
+    // Linha com bracket mas sem padrão específico (⚙ ::set-output::, 🐳 docker exec, ❓ ::group::, etc.)
+    // RE_ANY_BRACKET já foi testado no topo; aqui reutilizamos o match para extrair conteúdo
+    const bracketFallback = cleanForParsing.match(RE_ANY_BRACKET);
+    if (bracketFallback) {
+      const { effectiveJobId } = parseEffectiveBracket(bracketFallback[1]);
+      const stepId = this.currentStep.get(effectiveJobId) ?? effectiveJobId;
+      const lineContent = clean.slice(bracketFallback[0].length).trim();
+      if (lineContent) {
+        this.accumulatedLogs.push(lineContent);
+        eventBus.dispatch({ type: 'log', payload: { executionId, jobId: effectiveJobId, stepId, line: lineContent, level: 'info', timestamp: now() } });
+      }
+      return;
     }
+    // Linha sem bracket — stdout bruto do script em execução
+    this.accumulatedLogs.push(clean);
+    eventBus.dispatch({ type: 'log', payload: { executionId, line: clean, level: 'info', timestamp: now() } });
   }
 
   private buildArgs(options: ExecutionOptions, defaultImage: string, actCwd?: string): string[] {
@@ -246,6 +528,10 @@ export class ActRunner {
     if (options.eventPayloadPath) args.push('-e', sanitizePath(options.eventPayloadPath));
     if (options.envFile)      args.push('--env-file', sanitizePath(options.envFile));
     if (options.secretsFile)  args.push('--secret-file', sanitizePath(options.secretsFile));
+
+    // Passa --rm para que act remova o container automaticamente ao finalizar
+    // (cobre saída normal com sucesso ou falha gerenciada pelo próprio act)
+    args.push('--rm');
 
     // Só adicionar -P se nenhum .actrc no projeto já define a plataforma
     // (evita sobrescrever a configuração local do usuário)

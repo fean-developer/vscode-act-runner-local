@@ -20,9 +20,60 @@ export class ExecutionEngine {
 
     const actPath = vscode.workspace.getConfiguration('actRunner').get<string>('actPath', 'act');
     if (!await actRunner.isActInstalled(actPath)) {
-      throw new Error(
-        '"act" não encontrado. Configure o caminho em Configurações > actRunner.actPath ou use "Act: Localizar Executável do act".'
+      const choice = await vscode.window.showErrorMessage(
+        '❌ Executável "act" não encontrado. Informe onde ele está instalado.',
+        'Procurar arquivo...',
+        'Digitar caminho',
+        'Ver instalação'
       );
+
+      if (choice === 'Procurar arquivo...') {
+        const uris = await vscode.window.showOpenDialog({
+          canSelectFolders: false,
+          canSelectFiles: true,
+          canSelectMany: false,
+          openLabel: 'Selecionar executável do act',
+          title: 'Localizar binário do act',
+          filters: { 'Executável': ['*'] },
+        });
+        if (uris && uris.length > 0) {
+          const selected = uris[0].fsPath;
+          const ok = await actRunner.isActInstalled(selected);
+          if (ok) {
+            await vscode.workspace.getConfiguration('actRunner')
+              .update('actPath', selected, vscode.ConfigurationTarget.Global);
+            vscode.window.showInformationMessage(`✅ act configurado: ${selected}`);
+            // Retry with new path — fall through (don't return)
+          } else {
+            vscode.window.showErrorMessage(`❌ Não foi possível executar: ${selected}`);
+            return 'cancelled';
+          }
+        } else {
+          return 'cancelled';
+        }
+      } else if (choice === 'Digitar caminho') {
+        const typed = await vscode.window.showInputBox({
+          prompt: 'Cole ou digite o caminho completo para o binário do act',
+          placeHolder: '/home/user/.act/act  ou  /usr/local/bin/act',
+          ignoreFocusOut: true,
+        });
+        if (!typed || typed.trim() === '') return 'cancelled';
+        const ok = await actRunner.isActInstalled(typed.trim());
+        if (ok) {
+          await vscode.workspace.getConfiguration('actRunner')
+            .update('actPath', typed.trim(), vscode.ConfigurationTarget.Global);
+          vscode.window.showInformationMessage(`✅ act configurado: ${typed.trim()}`);
+          // Fall through to run with new path
+        } else {
+          vscode.window.showErrorMessage(`❌ Não foi possível executar: ${typed.trim()}`);
+          return 'cancelled';
+        }
+      } else if (choice === 'Ver instalação') {
+        vscode.env.openExternal(vscode.Uri.parse('https://github.com/nektos/act#installation'));
+        return 'cancelled';
+      } else {
+        return 'cancelled';
+      }
     }
     const workflow = workflowParser.parse(options.workflowPath);
     const validation = workflowValidator.validate(workflow);
@@ -103,12 +154,18 @@ export class ExecutionEngine {
     let finalStatus: ExecutionStatus = 'failed';
 
     try {
-      await actRunner.run(executionId, { ...options, actCwd, workspaceRoot });
+      await actRunner.run(executionId, { ...options, actCwd, workspaceRoot, workflowName: workflow.name });
       finalStatus = 'success';
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      eventBus.dispatch({ type: 'execution:error', payload: { executionId, error: message } });
       finalStatus = 'failed';
+      // "act encerrou com código N" = job falhou — fluxo esperado, já sinalizado via
+      // job:update + execution:end com status 'failed'. Não mostrar como "Erro Crítico".
+      // Erros genuínos (falha ao spawnar o processo, ENOENT, etc.) são propagados normalmente.
+      const isJobFailure = /^act encerrou com código \d+$/.test(message);
+      if (!isJobFailure) {
+        eventBus.dispatch({ type: 'execution:error', payload: { executionId, error: message } });
+      }
     } finally {
       this.activeExecutionId = null;
       const duration = Date.now() - this.startTime;
@@ -125,9 +182,12 @@ export class ExecutionEngine {
         dryRun: options.dryRun ?? false,
         actArgs: [],
         jobs: [],
-        logSummary: '',
+        logSummary: actRunner.getLogs().join('\n'),
       };
       await historyService.save(record);
+      // Notificar o webview com o histórico atualizado para que o painel Histórico reflita
+      // a nova execução imediatamente (sem precisar recarregar)
+      eventBus.sendSnapshot({ history: historyService.getAll() });
     }
 
     return executionId;

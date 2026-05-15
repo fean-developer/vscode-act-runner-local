@@ -1,10 +1,10 @@
 import * as vscode from 'vscode';
+import * as os from 'os';
+import * as path from 'path';
 import { actRunner } from './core/actRunner';
 import { executionEngine } from './core/executionEngine';
 import { historyService } from './core/historyService';
 import { envManager } from './core/envManager';
-import { webhookSimulator } from './core/webhookSimulator';
-import { templateEngine } from './core/templateEngine';
 import { dockerGuide } from './core/dockerGuide';
 import { workflowParser } from './core/workflowParser';
 import { workflowValidator } from './core/workflowValidator';
@@ -59,16 +59,6 @@ export function activate(context: vscode.ExtensionContext): void {
       openWebviewPanel(context, 'graph', () => safeRun(() => executionEngine.run(opts)));
     }),
 
-    vscode.commands.registerCommand('actRunner.quickRun', async () => {
-      const root = workspaceRoot();
-      if (!root) { vscode.window.showErrorMessage('Selecione um projeto primeiro (botão 📂 na sidebar).'); return; }
-      const paths = workflowParser.discoverWorkflows(root);
-      const wfPath = paths[0];
-      if (!wfPath) { vscode.window.showErrorMessage('Nenhum workflow encontrado em .github/workflows/'); return; }
-      const opts: ExecutionOptions = { workflowPath: wfPath, trigger: 'quick-run', workspaceRoot: root };
-      openWebviewPanel(context, 'graph', () => safeRun(() => executionEngine.run(opts)));
-    }),
-
     vscode.commands.registerCommand('actRunner.runJob', async (arg?: unknown, jobId?: string) => {
       const wfPath = extractPath(arg) ?? (await pickWorkflow());
       if (!wfPath) return;
@@ -77,13 +67,6 @@ export function activate(context: vscode.ExtensionContext): void {
         ?? (await pickJob(wfPath));
       if (!job) return;
       const opts: ExecutionOptions = { workflowPath: wfPath, jobId: job, trigger: 'manual', workspaceRoot: workspaceRoot() };
-      openWebviewPanel(context, 'graph', () => safeRun(() => executionEngine.run(opts)));
-    }),
-
-    vscode.commands.registerCommand('actRunner.dryRun', async (arg?: unknown) => {
-      const wfPath = extractPath(arg) ?? (await pickWorkflow());
-      if (!wfPath) return;
-      const opts: ExecutionOptions = { workflowPath: wfPath, dryRun: true, trigger: 'manual', workspaceRoot: workspaceRoot() };
       openWebviewPanel(context, 'graph', () => safeRun(() => executionEngine.run(opts)));
     }),
 
@@ -129,51 +112,13 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
 
     vscode.commands.registerCommand('actRunner.manageEnv', () => openWebviewPanel(context, 'env')),
-    vscode.commands.registerCommand('actRunner.simulateWebhook', () => openWebviewPanel(context, 'webhook')),
     vscode.commands.registerCommand('actRunner.viewHistory', () => openWebviewPanel(context, 'history')),
-    vscode.commands.registerCommand('actRunner.createWorkflow', () => openWebviewPanel(context, 'templates')),
-
-    vscode.commands.registerCommand('actRunner.createScript', async () => {
-      const templates = templateEngine.listScriptTemplates();
-      const pick = await vscode.window.showQuickPick(
-        templates.map((t) => ({ label: t.name, description: t.description, id: t.id })),
-        { placeHolder: 'Selecione o tipo de script a gerar' }
-      );
-      if (!pick) return;
-      const template = templates.find((t) => t.id === pick.id)!;
-      try {
-        const dest = await templateEngine.generateScript(template, workspaceRoot());
-        const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(dest));
-        await vscode.window.showTextDocument(doc);
-        vscode.window.showInformationMessage(`✅ Script gerado: ${dest}`);
-      } catch (e) {
-        vscode.window.showErrorMessage(`Erro ao gerar script: ${e instanceof Error ? e.message : e}`);
-      }
-    }),
-
     vscode.commands.registerCommand('actRunner.dockerGuide', () => dockerGuide.showGuide()),
-
     vscode.commands.registerCommand('actRunner.securityGuide', () => {
       vscode.env.openExternal(
         vscode.Uri.parse('https://docs.github.com/en/actions/security-guides/encrypted-secrets')
       );
     }),
-
-    vscode.commands.registerCommand('actRunner.configure', async () => {
-      const root = workspaceRoot();
-      const choice = await vscode.window.showQuickPick(
-        [
-          { label: '⚙️ Editar .actrc', path: envManager.getActrcFilePath(root) },
-          { label: '🔐 Editar .secrets', path: envManager.getSecretsFilePath(root) },
-          { label: '📄 Editar .env', path: envManager.getEnvFilePath(root) },
-        ],
-        { placeHolder: 'Qual arquivo configurar?' }
-      );
-      if (!choice) return;
-      const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(choice.path));
-      await vscode.window.showTextDocument(doc);
-    }),
-
     vscode.commands.registerCommand('actRunner.refreshExplorer', () => workflowExplorer.refresh()),
 
     vscode.commands.registerCommand('actRunner.selectProject', async () => {
@@ -284,9 +229,7 @@ async function showMainMenu(): Promise<void> {
   const isRunning = executionEngine.isRunning();
   const items = [
     { label: '▶ Executar Workflow',                command: 'actRunner.runWorkflow' },
-    { label: '⚡ Quick Run',                        command: 'actRunner.quickRun' },
     { label: '📋 Executar Job',                    command: 'actRunner.runJob' },
-    { label: '👁 Dry Run',                         command: 'actRunner.dryRun' },
     { label: '📋 Listar Jobs',                     command: 'actRunner.listJobs' },
     ...(isRunning ? [
       { label: '⏹ Parar Execução',          command: 'actRunner.stopExecution' },
@@ -294,13 +237,9 @@ async function showMainMenu(): Promise<void> {
     ] : []),
     { label: '✅ Validar Workflow',                command: 'actRunner.validateWorkflow' },
     { label: '🔐 Gerenciar Variáveis de Ambiente', command: 'actRunner.manageEnv' },
-    { label: '📡 Simular Webhook',                 command: 'actRunner.simulateWebhook' },
     { label: '📜 Ver Histórico',                   command: 'actRunner.viewHistory' },
-    { label: '📝 Criar Workflow (Templates)',       command: 'actRunner.createWorkflow' },
-    { label: '💻 Gerar Script',                    command: 'actRunner.createScript' },
     { label: '🐳 Alternativas ao Docker Desktop',  command: 'actRunner.dockerGuide' },
     { label: '🔒 Boas Práticas de Segurança',      command: 'actRunner.securityGuide' },
-    { label: '⚙️ Configurar (.actrc / .secrets)',  command: 'actRunner.configure' },
   ];
   const pick = await vscode.window.showQuickPick(items, { placeHolder: '⚡ Act Visual Runner' });
   if (pick) vscode.commands.executeCommand(pick.command);
@@ -318,6 +257,23 @@ function extractPath(arg: unknown): string | undefined {
     return (arg as { workflowPath: string }).workflowPath;
   }
   return undefined;
+}
+
+/**
+ * Localiza o .actrc verificando múltiplos caminhos em ordem de prioridade:
+ * 1. workspaceRoot/.actrc  (configuração do projeto)
+ * 2. parent(workspaceRoot)/.actrc  (repositórios com reusable workflows no pai)
+ * 3. ~/.actrc  (configuração global — o local mais comum)
+ * Retorna o primeiro que existir; se nenhum existir, retorna workspaceRoot/.actrc
+ */
+function resolveActrcPath(workspaceRoot: string): string {
+  const fsNode = require('fs') as typeof import('fs');
+  const candidates = [
+    path.join(workspaceRoot, '.actrc'),
+    path.join(path.dirname(workspaceRoot), '.actrc'),
+    path.join(os.homedir(), '.actrc'),
+  ];
+  return candidates.find((p) => fsNode.existsSync(p)) ?? candidates[0];
 }
 
 async function pickWorkflow(): Promise<string | undefined> {
@@ -400,6 +356,9 @@ function openWebviewPanel(context: vscode.ExtensionContext, initialView: string,
       case 'command:stop':
         executionEngine.stop();
         break;
+      case 'command:locateAct':
+        vscode.commands.executeCommand('actRunner.locateAct');
+        break;
       case 'command:rerun': {
         const record = historyService.getById(msg.payload.executionId);
         if (record) {
@@ -412,6 +371,77 @@ function openWebviewPanel(context: vscode.ExtensionContext, initialView: string,
             })
           );
         }
+        break;
+      }
+      case 'command:loadEnv': {
+        const { tab } = msg.payload as { tab: string };
+        const root = workspaceRoot();
+        let rows: { key: string; value: string }[] = [];
+        let foundFilePath = '';
+        try {
+          if (tab === 'actrc') {
+            // Procura .actrc em vários locais: projeto → pai do projeto → home (~/.actrc)
+            foundFilePath = resolveActrcPath(root);
+            const fsNode = require('fs') as typeof import('fs');
+            if (fsNode.existsSync(foundFilePath)) {
+              rows = fsNode.readFileSync(foundFilePath, 'utf-8')
+                .split('\n')
+                .map((l: string) => l.trim())
+                .filter((l: string) => l && !l.startsWith('#'))
+                .map((l: string) => ({ key: l, value: '' }));
+            }
+          } else {
+            const filePath = tab === 'env'
+              ? envManager.getEnvFilePath(root)
+              : envManager.getSecretsFilePath(root);
+            foundFilePath = filePath;
+            const map = envManager.read(filePath);
+            rows = Array.from(map.entries()).map(([key, value]) => ({ key, value }));
+          }
+        } catch { /* arquivo não existe — rows permanece vazio */ }
+        webviewPanel?.webview.postMessage({
+          type: 'state:snapshot',
+          payload: { envData: { tab, rows, filePath: foundFilePath } },
+        });
+        break;
+      }
+      case 'command:saveEnv': {
+        const { tab, rows, filePath: clientFilePath } = msg.payload as { tab: string; rows: { key: string; value: string }[]; filePath?: string };
+        const root = workspaceRoot();
+        if (!root) break;
+        try {
+          if (tab === 'actrc') {
+            // Salva no mesmo arquivo que foi carregado (ou no padrão do projeto)
+            const filePath = (clientFilePath && clientFilePath.length > 0)
+              ? clientFilePath
+              : resolveActrcPath(root);
+            const content = rows
+              .map((r) => r.key.trim())
+              .filter(Boolean)
+              .join('\n');
+            require('fs').writeFileSync(filePath, content + '\n', 'utf-8');
+          } else {
+            const filePath = tab === 'env'
+              ? envManager.getEnvFilePath(root)
+              : envManager.getSecretsFilePath(root);
+            const map = new Map(
+              rows.filter((r) => r.key.trim()).map((r) => [r.key.trim(), r.value])
+            );
+            envManager.write(filePath, map);
+          }
+          vscode.window.showInformationMessage(`✅ .${tab} salvo com sucesso.`);
+        } catch (e) {
+          vscode.window.showErrorMessage(`Erro ao salvar .${tab}: ${e instanceof Error ? e.message : e}`);
+        }
+        break;
+      }
+      case 'command:deleteHistory': {
+        const { executionId: delId } = msg.payload as { executionId: string };
+        await historyService.deleteById(delId);
+        webviewPanel?.webview.postMessage({
+          type: 'state:snapshot',
+          payload: { history: historyService.getAll() },
+        });
         break;
       }
       case 'state:request':

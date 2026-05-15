@@ -3,7 +3,7 @@ import * as path from 'path';
 import { workflowParser } from '../core/workflowParser';
 import type { WorkflowDefinition } from '../types/workflow.types';
 
-type WorkflowItemContext = 'workflow' | 'job' | 'empty';
+type WorkflowItemContext = 'workflow' | 'job' | 'empty' | 'folder';
 
 export class WorkflowTreeItem extends vscode.TreeItem {
   constructor(
@@ -16,14 +16,13 @@ export class WorkflowTreeItem extends vscode.TreeItem {
     super(label, collapsibleState);
     this.contextValue = itemContext;
 
-    if (itemContext === 'workflow') {
+    if (itemContext === 'folder') {
+      this.iconPath = new vscode.ThemeIcon('folder-opened');
+    } else if (itemContext === 'workflow') {
       this.iconPath = new vscode.ThemeIcon('file-code');
       this.tooltip = workflowPath;
-      // Sem command: clicar apenas expande/colapsa a árvore
-      // Executar via menu de contexto ou botão inline
     } else if (itemContext === 'job') {
       this.iconPath = new vscode.ThemeIcon('play-circle');
-      // Sem command: executar via menu de contexto (botão ▶ inline)
     } else {
       // empty / hint
       this.iconPath = new vscode.ThemeIcon('info');
@@ -101,7 +100,16 @@ export class WorkflowExplorer implements vscode.TreeDataProvider<WorkflowTreeIte
         ];
       }
 
-      return this.workflows.map(
+      // Header mostrando a pasta do projeto
+      const folderItem = new WorkflowTreeItem(
+        path.basename(root),
+        vscode.TreeItemCollapsibleState.None,
+        'folder'
+      );
+      folderItem.description = root;
+      folderItem.tooltip = `Projeto: ${root}`;
+
+      const workflowItems = this.workflows.map(
         (w) =>
           new WorkflowTreeItem(
             `${w.name}  (${path.basename(w.filePath)})`,
@@ -110,6 +118,7 @@ export class WorkflowExplorer implements vscode.TreeDataProvider<WorkflowTreeIte
             w.filePath
           )
       );
+      return [folderItem, ...workflowItems];
     }
 
     if (element.itemContext === 'workflow' && element.workflowPath) {

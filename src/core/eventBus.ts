@@ -19,6 +19,13 @@ class EventBus extends EventEmitter {
     super.emit(event.type, event.payload);
   }
 
+  /** Envia um state:snapshot para todos os painéis registrados */
+  sendSnapshot(payload: Record<string, unknown>): void {
+    this.panels.forEach((panel) => {
+      panel.webview.postMessage({ type: 'state:snapshot', payload });
+    });
+  }
+
   on<T extends ActEventType>(
     event: T,
     listener: (payload: PayloadOf<T>) => void

@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useCallback, useState } from 'react';
 import { useExecutionStore, type AppView } from './store/executionStore';
 import type { ActEvent, WebviewMessage } from '../types/events.types';
 
@@ -6,10 +6,9 @@ import type { ActEvent, WebviewMessage } from '../types/events.types';
 import { WorkflowGraph } from './components/WorkflowGraph';
 import { HistoryPanel } from './components/HistoryPanel';
 import { EnvEditor } from './components/EnvEditor';
-import { WebhookSimulator } from './components/WebhookSimulator';
-import { TemplateSelector } from './components/TemplateSelector';
 import { ControlBar } from './components/ControlBar';
 import { LogPanel } from './components/LogPanel';
+import { ExecutionSidebar } from './components/ExecutionSidebar';
 
 declare global {
   interface Window {
@@ -22,6 +21,24 @@ declare global {
 
 export function App() {
   const { currentView, setView, handleEvent, setHistory } = useExecutionStore();
+  const [logHeight, setLogHeight] = useState(200);
+
+  const startResize = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    const startY = e.clientY;
+    const startH = logHeight;
+    const onMove = (ev: MouseEvent) => {
+      // dragging up increases log height
+      const delta = startY - ev.clientY;
+      setLogHeight(Math.max(60, Math.min(window.innerHeight - 120, startH + delta)));
+    };
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  }, [logHeight]);
 
   // Definir view inicial vinda do Extension Host
   useEffect(() => {
@@ -65,14 +82,29 @@ export function App() {
       <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         {currentView === 'graph' && (
           <>
-            <WorkflowGraph />
-            <LogPanel />
+            {/* Área principal: sidebar (navigator) + grafo (status) */}
+            <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}>
+              <ExecutionSidebar />
+              <WorkflowGraph />
+            </div>
+            {/* Drag handle */}
+            <div
+              onMouseDown={startResize}
+              style={{
+                height: 5,
+                cursor: 'row-resize',
+                background: '#21262d',
+                borderTop: '1px solid #30363d',
+                borderBottom: '1px solid #30363d',
+                flexShrink: 0,
+                userSelect: 'none',
+              }}
+            />
+            <LogPanel height={logHeight} />
           </>
         )}
         {currentView === 'history' && <HistoryPanel />}
         {currentView === 'env' && <EnvEditor />}
-        {currentView === 'webhook' && <WebhookSimulator />}
-        {currentView === 'templates' && <TemplateSelector />}
       </div>
     </div>
   );

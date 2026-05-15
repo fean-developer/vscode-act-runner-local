@@ -9,8 +9,6 @@ dist/
 
 # Ambiente e secrets — NUNCA commitar
 .secrets
-.env.local
-.env.production
 *.pem
 *.key
 
@@ -20,3 +18,6 @@ dist/
 
 # Package
 *.vsix
+.env.*
+.env
+

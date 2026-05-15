@@ -3,7 +3,6 @@ import { useExecutionStore } from '../store/executionStore';
 
 /**
  * Barra de controle superior com botões de execução e navegação.
- * Implementação completa: @frontend
  */
 export function ControlBar() {
   const { currentView, setView, execution } = useExecutionStore();
@@ -13,19 +12,27 @@ export function ControlBar() {
 
   // Inclui workflowPath nas execuções iniciadas pelo webview
   const runPayload = execution.workflowPath ? { workflowPath: execution.workflowPath } : {};
+  const isRunning = execution.status === 'running';
 
   return (
     <div style={styles.bar}>
       <div style={styles.left}>
-        <button style={styles.btn} onClick={() => send('command:run', runPayload)}>▶ Executar</button>
-        <button style={styles.btn} onClick={() => send('command:quickRun', runPayload)}>⚡ Quick Run</button>
-        <button style={{ ...styles.btn, background: '#374151' }} onClick={() => send('command:run', { ...runPayload, dryRun: true })}>👁 Dry Run</button>
-        {execution.status === 'running' && (
-          <button style={{ ...styles.btn, background: '#EF4444' }} onClick={() => send('command:stop', {})}>⏹ Parar</button>
+        {!isRunning && (
+          <button style={styles.btnPrimary} onClick={() => send('command:run', runPayload)}>▶ Executar</button>
         )}
+        {isRunning && (
+          <button style={styles.btnDanger} onClick={() => send('command:stop', {})}>⏹ Parar</button>
+        )}
+        <button
+          style={styles.btnAct}
+          title="Configurar caminho do executável act"
+          onClick={() => send('command:locateAct', {})}
+        >
+          ⚙ act
+        </button>
       </div>
       <div style={styles.right}>
-        {(['graph', 'history', 'env', 'webhook', 'templates'] as const).map((view) => (
+        {(['graph', 'history', 'env'] as const).map((view) => (
           <button
             key={view}
             style={{ ...styles.tab, ...(currentView === view ? styles.tabActive : {}) }}
@@ -40,14 +47,36 @@ export function ControlBar() {
 }
 
 const VIEW_LABELS: Record<string, string> = {
-  graph: '🗺 Grafo', history: '📜 Histórico', env: '🔐 Variáveis', webhook: '📡 Webhook', templates: '📝 Templates',
+  graph: '🗺 Grafo', history: '📜 Histórico', env: '🔐 Variáveis',
 };
 
 const styles: Record<string, React.CSSProperties> = {
-  bar: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 12px', background: '#1F2937', borderBottom: '1px solid #374151', gap: 8, flexWrap: 'wrap' },
-  left: { display: 'flex', gap: 6 },
+  bar: {
+    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+    padding: '6px 12px', background: '#161b22', borderBottom: '1px solid #21262d',
+    gap: 8, flexWrap: 'wrap',
+  },
+  left:  { display: 'flex', gap: 6, alignItems: 'center' },
   right: { display: 'flex', gap: 4 },
-  btn: { padding: '4px 10px', border: 'none', borderRadius: 4, background: '#3B82F6', color: '#fff', cursor: 'pointer', fontSize: 12 },
-  tab: { padding: '3px 8px', border: '1px solid #374151', borderRadius: 4, background: 'transparent', color: '#9CA3AF', cursor: 'pointer', fontSize: 11 },
-  tabActive: { background: '#374151', color: '#F3F4F6', borderColor: '#6B7280' },
+  btnPrimary: {
+    padding: '4px 10px', border: 'none', borderRadius: 4,
+    background: '#238636', color: '#fff', cursor: 'pointer', fontSize: 12,
+  },
+  btnSecondary: {
+    padding: '4px 10px', border: '1px solid #30363d', borderRadius: 4,
+    background: 'transparent', color: '#c9d1d9', cursor: 'pointer', fontSize: 12,
+  },
+  btnDanger: {
+    padding: '4px 10px', border: 'none', borderRadius: 4,
+    background: '#da3633', color: '#fff', cursor: 'pointer', fontSize: 12,
+  },
+  btnAct: {
+    padding: '4px 8px', border: '1px solid #30363d', borderRadius: 4,
+    background: 'transparent', color: '#8b949e', cursor: 'pointer', fontSize: 11,
+  },
+  tab: {
+    padding: '3px 8px', border: '1px solid #30363d', borderRadius: 4,
+    background: 'transparent', color: '#8b949e', cursor: 'pointer', fontSize: 11,
+  },
+  tabActive: { background: '#21262d', color: '#e6edf3', borderColor: '#484f58' },
 };

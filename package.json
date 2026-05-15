@@ -1,9 +1,9 @@
 {
   "name": "act-visual-runner",
-  "displayName": "Act Visual Runner",
+  "displayName": "Act/Run - GitHub Actions Visual locally",
   "description": "Execute GitHub Actions localmente com interface visual estilo n8n usando nektos/act",
-  "version": "0.1.0",
-  "publisher": "act-visual-runner",
+  "version": "1.0.0",
+  "publisher": "fean-developer",
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -15,8 +15,11 @@
     "act",
     "workflow",
     "ci",
-    "cd"
+    "cd",
+    "docker",
+    "runner"
   ],
+  "icon": "resources/logo.png",
   "activationEvents": [
     "onStartupFinished"
   ],
@@ -33,10 +36,6 @@
         "icon": "$(run)"
       },
       {
-        "command": "actRunner.quickRun",
-        "title": "Act: Quick Run"
-      },
-      {
         "command": "actRunner.runJob",
         "title": "Act: Executar Job",
         "icon": "$(run)"
@@ -44,11 +43,6 @@
       {
         "command": "actRunner.listJobs",
         "title": "Act: Listar Jobs"
-      },
-      {
-        "command": "actRunner.dryRun",
-        "title": "Act: Dry Run",
-        "icon": "$(eye)"
       },
       {
         "command": "actRunner.stopExecution",
@@ -68,20 +62,8 @@
         "title": "Act: Gerenciar Variáveis de Ambiente"
       },
       {
-        "command": "actRunner.simulateWebhook",
-        "title": "Act: Simular Webhook"
-      },
-      {
         "command": "actRunner.viewHistory",
         "title": "Act: Ver Histórico"
-      },
-      {
-        "command": "actRunner.createWorkflow",
-        "title": "Act: Criar Novo Workflow"
-      },
-      {
-        "command": "actRunner.createScript",
-        "title": "Act: Gerar Script"
       },
       {
         "command": "actRunner.dockerGuide",
@@ -90,10 +72,6 @@
       {
         "command": "actRunner.securityGuide",
         "title": "Act: Boas Práticas de Segurança"
-      },
-      {
-        "command": "actRunner.configure",
-        "title": "Act: Configurar (.actrc / .secrets)"
       },
       {
         "command": "actRunner.refreshExplorer",
@@ -115,8 +93,8 @@
       "activitybar": [
         {
           "id": "actRunner",
-          "title": "Act Runner",
-          "icon": "$(play-circle)"
+          "title": "ACT Runner",
+          "icon": "resources/icon.svg"
         }
       ]
     },
@@ -158,14 +136,9 @@
           "group": "inline@1"
         },
         {
-          "command": "actRunner.dryRun",
-          "when": "viewItem == workflow",
-          "group": "inline@2"
-        },
-        {
           "command": "actRunner.validateWorkflow",
           "when": "viewItem == workflow",
-          "group": "inline@3"
+          "group": "inline@2"
         },
         {
           "command": "actRunner.runJob",
@@ -178,14 +151,9 @@
           "group": "1_run@1"
         },
         {
-          "command": "actRunner.dryRun",
-          "when": "viewItem == workflow",
-          "group": "1_run@2"
-        },
-        {
           "command": "actRunner.validateWorkflow",
           "when": "viewItem == workflow",
-          "group": "1_run@3"
+          "group": "1_run@2"
         },
         {
           "command": "actRunner.runJob",
@@ -199,12 +167,6 @@
         },
         {
           "command": "actRunner.runWorkflow"
-        },
-        {
-          "command": "actRunner.quickRun"
-        },
-        {
-          "command": "actRunner.dryRun"
         },
         {
           "command": "actRunner.validateWorkflow"
@@ -221,7 +183,7 @@
       ]
     },
     "configuration": {
-      "title": "Act Visual Runner",
+      "title": "Act/Run - GitHub Actions Visual locally",
       "properties": {
         "actRunner.actPath": {
           "type": "string",
