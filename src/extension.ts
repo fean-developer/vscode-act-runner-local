@@ -17,6 +17,7 @@ import type { ExecutionOptions } from './types/execution.types';
 
 let webviewPanel: vscode.WebviewPanel | undefined;
 /** Execução pendente: inicia quando o webview enviar state:request (React montado) */
+/* Start */
 let pendingExecution: (() => void) | undefined;
 
 export function activate(context: vscode.ExtensionContext): void {
