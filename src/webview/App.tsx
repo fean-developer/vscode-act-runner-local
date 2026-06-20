@@ -13,6 +13,7 @@ import { SummaryPanel } from './components/SummaryPanel';
 import { RunSummaryHeader } from './components/RunSummaryHeader';
 import { AnalyticsPanel } from './components/AnalyticsPanel';
 import { WorkflowLauncherSidebar } from './components/WorkflowLauncherSidebar';
+import { WorkflowRunDialog } from './components/WorkflowRunDialog';
 
 declare global {
   interface Window {
@@ -89,6 +90,7 @@ export function App() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
       <ControlBar />
+      <WorkflowRunDialog />
       <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         {currentView === 'graph' && (
           <>

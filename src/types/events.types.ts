@@ -85,7 +85,7 @@ export type WebviewMessage =
 
 // Comandos enviados da Webview para o Extension Host
 export type WebviewCommand =
-  | { type: 'command:run';       payload: { workflowPath?: string; jobId?: string; dryRun?: boolean } }
+  | { type: 'command:run';       payload: { workflowPath?: string; jobId?: string; dryRun?: boolean; workflowInputs?: Record<string, string | number | boolean> } }
   | { type: 'command:quickRun';  payload: { workflowPath: string } }
   | { type: 'command:stop';      payload: { executionId: string } }
   | { type: 'command:rerun';     payload: { executionId: string } }

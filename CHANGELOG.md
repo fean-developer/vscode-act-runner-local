@@ -1,6 +1,6 @@
 # Changelog
 
-## Não Lançado
+## v2.10.0
 
 ### Adicionado
 
@@ -23,6 +23,10 @@
 - Adicionado envio da lista de workflows do extension host para o webview.
 - Adicionado comportamento de executar workflow ao clicar em um item da sidebar interna.
 - Adicionada abertura automática da UI principal do Act Visual Runner ao selecionar a extensão na Activity Bar.
+- Adicionado suporte a `workflow_dispatch.inputs` antes da execução do workflow.
+- Adicionado modal **Run workflow** para preencher inputs do workflow no estilo do GitHub Actions.
+- Adicionado suporte a inputs dos tipos `string`, `number`, `boolean`, `choice` e `environment`.
+- Adicionado envio de payload temporário `workflow_dispatch` para o `act` com os valores informados na UI.
 
 ### Alterado
 
@@ -31,3 +35,8 @@
 - A view de grafo do workflow agora inclui o cabeçalho compartilhado de resumo da execução.
 - A view Summary agora reutiliza o mesmo componente de grafo da view Grafo, preservando o layout de jobs paralelos.
 - O botão Executar agora usa o workflow selecionado na sidebar interna quando não há execução ativa.
+- O botão Executar agora abre o modal de inputs quando o workflow selecionado possui `workflow_dispatch.inputs`.
+
+### Corrigido
+
+- Corrigida a ausência de fluxo visual para informar inputs obrigatórios antes de executar workflows manuais.

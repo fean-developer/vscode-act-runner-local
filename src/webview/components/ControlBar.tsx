@@ -5,7 +5,7 @@ import { useExecutionStore } from '../store/executionStore';
  * Barra de controle superior com botões de execução e navegação.
  */
 export function ControlBar() {
-  const { currentView, setView, execution, summaryContent, selectedWorkflowPath } = useExecutionStore();
+  const { currentView, setView, execution, summaryContent, selectedWorkflowPath, workflows, openWorkflowRunDialog } = useExecutionStore();
   const hasSummary = !!summaryContent;
 
   const send = (type: string, payload: Record<string, unknown> = {}) =>
@@ -15,11 +15,21 @@ export function ControlBar() {
   const runPayload = { workflowPath: execution.workflowPath ?? selectedWorkflowPath ?? undefined };
   const isRunning = execution.status === 'running';
 
+  const runSelectedWorkflow = () => {
+    const workflowPath = execution.workflowPath ?? selectedWorkflowPath ?? undefined;
+    const workflow = workflows.find((item) => item.filePath === workflowPath);
+    if (workflow?.inputs.length) {
+      openWorkflowRunDialog(workflow.filePath);
+      return;
+    }
+    send('command:run', { workflowPath });
+  };
+
   return (
     <div style={styles.bar}>
       <div style={styles.left}>
         {!isRunning && (
-          <button style={styles.btnPrimary} onClick={() => send('command:run', runPayload)}>▶ Executar</button>
+          <button style={styles.btnPrimary} onClick={runSelectedWorkflow}>▶ Executar</button>
         )}
         {isRunning && (
           <button style={styles.btnDanger} onClick={() => send('command:stop', {})}>⏹ Parar</button>
