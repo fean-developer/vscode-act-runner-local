@@ -130,6 +130,11 @@ export class ActRunner {
    */
   private currentStep = new Map<string, string>(); // effectiveJobId → stepName
 
+  /** Conteúdo acumulado do GITHUB_STEP_SUMMARY (capturado do output ◎ Summary) */
+  private summaryLines: string[] = [];
+  /** Flag indicando que estamos capturando linhas do summary (entre ◎ Summary e o próximo bracket) */
+  private inSummaryCapture = false;
+
   /** Retorna os logs acumulados da última execução */
   getLogs(): string[] {
     return [...this.accumulatedLogs];
@@ -224,6 +229,9 @@ export class ActRunner {
     this.lastOuterJobId = null;
     this.failedInnerByOuter.clear();
     this.workflowDisplayName = options.workflowName ?? null;
+    this.summaryLines = [];
+    this.inSummaryCapture = false;
+
     // Limpar containers act-* órfãos de execuções anteriores antes de iniciar
     await this.cleanupActContainers();
     return new Promise((resolve, reject) => {
@@ -262,6 +270,10 @@ export class ActRunner {
           eventBus.dispatch({ type: 'job:update', payload: { executionId, jobId: pendingJobId, jobName: pendingJobId, status: finalJobStatus, completedAt: pending.completedAt } });
         }
         this.pendingJobStatus.clear();
+
+        // Flush summary acumulado do output do act
+        this.flushSummary(executionId);
+
         eventBus.dispatch({
           type: 'execution:end',
           payload: {
@@ -291,6 +303,8 @@ export class ActRunner {
     this.currentStep.clear();
     this.lastOuterJobId = null;
     this.failedInnerByOuter.clear();
+    this.summaryLines = [];
+    this.inSummaryCapture = false;
     this.activeProcess?.kill('SIGTERM');
     this.activeProcess = null;
     // Limpar containers act-* que ficaram ativos após o kill
@@ -492,22 +506,64 @@ export class ActRunner {
       eventBus.dispatch({ type: 'log', payload: { executionId, jobId: effectiveJobId, stepId, line: m[2], level: 'info', timestamp: now() } });
       return;
     }
-    // Linha com bracket mas sem padrão específico (⚙ ::set-output::, 🐳 docker exec, ❓ ::group::, etc.)
-    // RE_ANY_BRACKET já foi testado no topo; aqui reutilizamos o match para extrair conteúdo
+    // ── Detecção de GITHUB_STEP_SUMMARY via output do act ──────────────────
+    // Act pode emitir: [bracket] ◎ Summary - <linha> ou [bracket] Summary - <linha>
+    // Linhas seguintes sem bracket são continuação do summary.
     const bracketFallback = cleanForParsing.match(RE_ANY_BRACKET);
     if (bracketFallback) {
+      const lineContent = clean.slice(clean.indexOf(']') + 1).trim();
+      // Detectar início de summary, tolerando ícones/símbolos antes de "Summary".
+      const summaryMatch = lineContent.match(/^(?:[^A-Za-z0-9#|`*-]+\s*)?Summary\s*-\s*(.*)$/i);
+      if (summaryMatch) {
+        // Flush summary anterior se existir (outro job pode ter gerado summary antes)
+        this.flushSummary(executionId);
+        this.inSummaryCapture = true;
+        if (summaryMatch[1].trim()) {
+          this.summaryLines.push(summaryMatch[1].trim());
+        }
+        // Também enviar como log normal
+        const { effectiveJobId } = parseEffectiveBracket(bracketFallback[1]);
+        const stepId = this.currentStep.get(effectiveJobId) ?? effectiveJobId;
+        this.accumulatedLogs.push(lineContent);
+        eventBus.dispatch({ type: 'log', payload: { executionId, jobId: effectiveJobId, stepId, line: lineContent, level: 'info', timestamp: now() } });
+        return;
+      }
+      // Qualquer outra linha com bracket encerra a captura de summary
+      if (this.inSummaryCapture) {
+        this.inSummaryCapture = false;
+        this.dispatchSummary(executionId);
+      }
+      // Linha com bracket mas sem padrão específico (⚙ ::set-output::, 🐳 docker exec, etc.)
       const { effectiveJobId } = parseEffectiveBracket(bracketFallback[1]);
       const stepId = this.currentStep.get(effectiveJobId) ?? effectiveJobId;
-      const lineContent = clean.slice(bracketFallback[0].length).trim();
       if (lineContent) {
         this.accumulatedLogs.push(lineContent);
         eventBus.dispatch({ type: 'log', payload: { executionId, jobId: effectiveJobId, stepId, line: lineContent, level: 'info', timestamp: now() } });
       }
       return;
     }
-    // Linha sem bracket — stdout bruto do script em execução
+    // Linha sem bracket — pode ser continuação do summary ou stdout bruto
+    if (this.inSummaryCapture) {
+      this.summaryLines.push(clean);
+    }
     this.accumulatedLogs.push(clean);
     eventBus.dispatch({ type: 'log', payload: { executionId, line: clean, level: 'info', timestamp: now() } });
+  }
+
+  /** Despacha o summary acumulado para o webview se houver conteúdo */
+  private dispatchSummary(executionId: string): void {
+    if (this.summaryLines.length === 0) return;
+    const content = this.summaryLines.join('\n');
+    actLog(`[act-runner] summary:update (${this.summaryLines.length} lines)`);
+    eventBus.dispatch({ type: 'summary:update', payload: { executionId, content } });
+  }
+
+  /** Flush final do summary (chamado no close do processo) */
+  private flushSummary(executionId: string): void {
+    if (this.inSummaryCapture) {
+      this.inSummaryCapture = false;
+    }
+    this.dispatchSummary(executionId);
   }
 
   private buildArgs(options: ExecutionOptions, defaultImage: string, actCwd?: string): string[] {

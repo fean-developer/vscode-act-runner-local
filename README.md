@@ -8,9 +8,25 @@ Extensão VSCode que executa workflows GitHub Actions localmente usando [nektos/
 
 ![gif](images/vscode-act-ext.gif)
 
+### Nova visão
+ - Sidebar interna na UI
+ - Seleção de repositorio agora abre na coluna principal do editor para uma experiência de UI mais expandida
 ---
-<img src="images/principal_flow.png" alt="Description" width="1024">
+<img src="images/image-new-1.png" alt="Description" width="1024">
 
+---
+
+### Summary
+ - Agora opção de ver o Summary o mesmo que aparece no Github
+
+<img src="images/image-summary.png" alt="Description" width="1024">
+
+---
+
+### Analytcs
+ - Agora dispõe de um painel analytics baseado no historico de execuçoes locais
+
+<img src="images/image-analytic.png" alt="Description" width="1024">
 
 ---
 
@@ -109,6 +125,8 @@ Crie na raiz do projeto:
 
 Veja o arquivo [USER GUIDE](USER_GUIDE.md) incluído na extensão para instruções detalhadas de uso.
 
+## Buy me a Coffe
+<img src="images/bmc_qr.png" width=100 img/><br />
 ## Licença
 
 MIT

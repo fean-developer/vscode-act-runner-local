@@ -18,6 +18,7 @@ export interface JobUpdatePayload {
   status: JobStatus;
   startedAt?: string;
   completedAt?: string;
+  duration?: number;
   /** Presente apenas para inner jobs de reusable workflows (3-level bracket) */
   outerJobId?: string;
 }
@@ -55,6 +56,12 @@ export interface ExecutionErrorPayload {
   code?: string;
 }
 
+export interface SummaryUpdatePayload {
+  executionId: string;
+  /** Conteúdo Markdown bruto do GITHUB_STEP_SUMMARY (acumulado de todos os steps/jobs) */
+  content: string;
+}
+
 // Discriminated union — todos os eventos do backend
 export type ActEvent =
   | { type: 'execution:start'; payload: ExecutionStartPayload }
@@ -62,7 +69,8 @@ export type ActEvent =
   | { type: 'step:update';     payload: StepUpdatePayload }
   | { type: 'log';             payload: LogPayload }
   | { type: 'execution:end';   payload: ExecutionEndPayload }
-  | { type: 'execution:error'; payload: ExecutionErrorPayload };
+  | { type: 'execution:error'; payload: ExecutionErrorPayload }
+  | { type: 'summary:update';  payload: SummaryUpdatePayload };
 
 export type ActEventType = ActEvent['type'];
 
@@ -77,10 +85,11 @@ export type WebviewMessage =
 
 // Comandos enviados da Webview para o Extension Host
 export type WebviewCommand =
-  | { type: 'command:run';       payload: { workflowPath: string; jobId?: string; dryRun?: boolean } }
+  | { type: 'command:run';       payload: { workflowPath?: string; jobId?: string; dryRun?: boolean } }
   | { type: 'command:quickRun';  payload: { workflowPath: string } }
   | { type: 'command:stop';      payload: { executionId: string } }
   | { type: 'command:rerun';     payload: { executionId: string } }
+  | { type: 'command:selectProject'; payload: Record<string, never> }
   | { type: 'command:locateAct'; payload: Record<string, never> }
   | { type: 'command:loadEnv';      payload: { tab: string } }
   | { type: 'command:saveEnv';      payload: { tab: string; rows: { key: string; value: string }[] } }

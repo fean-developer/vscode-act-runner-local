@@ -1,0 +1,139 @@
+import React from 'react';
+import { useExecutionStore, type WorkflowListItem } from '../store/executionStore';
+
+export function WorkflowLauncherSidebar() {
+  const { workflows, selectedWorkflowPath, repository, setSelectedWorkflowPath } = useExecutionStore();
+
+  const selectRepository = () => {
+    window.__vscode__?.postMessage({ type: 'command:selectProject', payload: {} });
+  };
+
+  const runWorkflow = (workflow: WorkflowListItem) => {
+    if (!workflow.valid) return;
+    setSelectedWorkflowPath(workflow.filePath);
+    window.__vscode__?.postMessage({ type: 'command:run', payload: { workflowPath: workflow.filePath } });
+  };
+
+  return (
+    <aside style={styles.sidebar}>
+      <div style={styles.repoBox}>
+        <div style={styles.repoLabel}>Repositório</div>
+        <button type="button" style={styles.repoButton} onClick={selectRepository} title={repository?.root ?? 'Selecionar repositório'}>
+          <span style={styles.repoIcon}>📁</span>
+          <span style={styles.repoText}>{repository?.name ?? 'Selecionar repositório'}</span>
+        </button>
+      </div>
+      <div style={styles.header}>
+        <span style={styles.title}>Workflows</span>
+        <span style={styles.count}>{workflows.length}</span>
+      </div>
+      <div style={styles.list}>
+        {workflows.length === 0 ? (
+          <div style={styles.empty}>
+            Nenhum workflow encontrado em .github/workflows.
+            <button type="button" style={styles.emptyButton} onClick={selectRepository}>Selecionar repositório</button>
+          </div>
+        ) : workflows.map((workflow) => {
+          const active = selectedWorkflowPath === workflow.filePath;
+          return (
+            <button
+              key={workflow.filePath}
+              type="button"
+              title={workflow.valid ? `Executar ${workflow.fileName}` : workflow.error}
+              style={{
+                ...styles.item,
+                ...(active ? styles.itemActive : {}),
+                ...(!workflow.valid ? styles.itemInvalid : {}),
+              }}
+              onClick={() => runWorkflow(workflow)}
+            >
+              <span style={styles.icon}>{workflow.valid ? '▶' : '!'}</span>
+              <span style={styles.itemText}>
+                <span style={styles.itemName}>{workflow.name}</span>
+                <span style={styles.itemMeta}>{workflow.fileName} · {workflow.jobs} job{workflow.jobs === 1 ? '' : 's'}</span>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </aside>
+  );
+}
+
+const styles: Record<string, React.CSSProperties> = {
+  sidebar: {
+    width: 240,
+    flexShrink: 0,
+    borderRight: '1px solid #21262d',
+    background: '#0d1117',
+    display: 'flex',
+    flexDirection: 'column',
+    overflow: 'hidden',
+  },
+  repoBox: {
+    padding: 10,
+    borderBottom: '1px solid #21262d',
+  },
+  repoLabel: {
+    marginBottom: 6,
+    color: '#8b949e',
+    fontSize: 10,
+    fontWeight: 700,
+    textTransform: 'uppercase',
+  },
+  repoButton: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    width: '100%',
+    padding: '7px 8px',
+    border: '1px solid #30363d',
+    borderRadius: 6,
+    background: '#161b22',
+    color: '#e6edf3',
+    cursor: 'pointer',
+    textAlign: 'left',
+  },
+  repoIcon: { flexShrink: 0, fontSize: 13 },
+  repoText: { minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, fontWeight: 700 },
+  header: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: '10px 12px',
+    borderBottom: '1px solid #21262d',
+  },
+  title: { color: '#e6edf3', fontSize: 12, fontWeight: 700, textTransform: 'uppercase' },
+  count: { color: '#8b949e', fontSize: 11 },
+  list: { overflow: 'auto', padding: 8, display: 'flex', flexDirection: 'column', gap: 6 },
+  empty: { color: '#8b949e', fontSize: 12, padding: 8, lineHeight: 1.4, display: 'flex', flexDirection: 'column', gap: 10 },
+  emptyButton: {
+    padding: '6px 8px',
+    border: '1px solid #30363d',
+    borderRadius: 5,
+    background: '#161b22',
+    color: '#c9d1d9',
+    cursor: 'pointer',
+    fontSize: 11,
+  },
+  item: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    width: '100%',
+    minHeight: 54,
+    padding: '8px 10px',
+    border: '1px solid transparent',
+    borderRadius: 6,
+    background: 'transparent',
+    color: '#c9d1d9',
+    textAlign: 'left',
+    cursor: 'pointer',
+  },
+  itemActive: { background: '#161b22', borderColor: '#30363d' },
+  itemInvalid: { color: '#f85149', cursor: 'not-allowed', opacity: 0.8 },
+  icon: { width: 16, flexShrink: 0, color: '#3fb950', fontSize: 11 },
+  itemText: { minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 },
+  itemName: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, fontWeight: 700 },
+  itemMeta: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#8b949e', fontSize: 11 },
+};

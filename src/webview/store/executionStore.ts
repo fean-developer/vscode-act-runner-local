@@ -1,10 +1,10 @@
 import { create } from 'zustand';
-import type { ActEvent, StepUpdatePayload, JobUpdatePayload, LogPayload, ExecutionStartPayload, ExecutionEndPayload } from '../../types/events.types';
+import type { ActEvent, StepUpdatePayload, JobUpdatePayload, LogPayload, ExecutionStartPayload, ExecutionEndPayload, SummaryUpdatePayload } from '../../types/events.types';
 import type { ExecutionRecord } from '../../types/execution.types';
 import type { WorkflowGraph } from '../../types/workflow.types';
 
 export type NodeStatus = 'idle' | 'running' | 'success' | 'failed' | 'skipped';
-export type AppView = 'graph' | 'history' | 'env';
+export type AppView = 'graph' | 'history' | 'env' | 'summary' | 'analytics';
 
 export interface GraphNode {
   id: string;
@@ -39,6 +39,22 @@ export interface ExecutionState {
   workflowName: string;
   workflowPath: string | null;
   startedAt: string | null;
+  completedAt: string | null;
+  duration: number | null;
+}
+
+export interface WorkflowListItem {
+  name: string;
+  filePath: string;
+  fileName: string;
+  jobs: number;
+  valid: boolean;
+  error?: string;
+}
+
+export interface RepositoryInfo {
+  root: string;
+  name: string;
 }
 
 interface StoreState {
@@ -57,17 +73,28 @@ interface StoreState {
 
   // Histórico
   history: ExecutionRecord[];
+
+  // Workflows descobertos no projeto atual
+  workflows: WorkflowListItem[];
+  selectedWorkflowPath: string | null;
+  repository: RepositoryInfo | null;
   // Logs por execução (salvo ao final de cada execução, para exibir no histórico)
   historyLogs: Record<string, string[]>;
 
   // Filtro de log ativo (job e/ou step selecionado no grafo)
   logFilter: { jobId: string; stepLabel?: string; label: string } | null;
 
+  // GITHUB_STEP_SUMMARY — conteúdo Markdown acumulado por execução
+  summaryContent: string;
+
   // Ações
   setView: (view: AppView) => void;
   handleEvent: (event: ActEvent) => void;
   resetExecution: () => void;
   setHistory: (records: ExecutionRecord[]) => void;
+  setWorkflows: (records: WorkflowListItem[]) => void;
+  setRepository: (repository: RepositoryInfo | null) => void;
+  setSelectedWorkflowPath: (workflowPath: string | null) => void;
   setLogFilter: (filter: { jobId: string; stepLabel?: string; label: string } | null) => void;
 }
 
@@ -77,6 +104,8 @@ const initialExecution: ExecutionState = {
   workflowName: '',
   workflowPath: null,
   startedAt: null,
+  completedAt: null,
+  duration: null,
 };
 
 let logCounter = 0;
@@ -88,17 +117,32 @@ export const useExecutionStore = create<StoreState>((set) => ({
   edges: [],
   logs: [],
   history: [],
+  workflows: [],
+  selectedWorkflowPath: null,
+  repository: null,
   historyLogs: {},
   logFilter: null,
+  summaryContent: '',
 
   setView: (view) => set({ currentView: view }),
 
   setHistory: (records) => set({ history: records }),
 
+  setWorkflows: (records) => set((s) => ({
+    workflows: records,
+    selectedWorkflowPath: s.selectedWorkflowPath && records.some((record) => record.filePath === s.selectedWorkflowPath)
+      ? s.selectedWorkflowPath
+      : records[0]?.filePath ?? null,
+  })),
+
+  setRepository: (repository) => set({ repository }),
+
+  setSelectedWorkflowPath: (workflowPath) => set({ selectedWorkflowPath: workflowPath }),
+
   setLogFilter: (filter) => set({ logFilter: filter }),
 
   resetExecution: () =>
-    set({ execution: initialExecution, nodes: [], edges: [], logs: [], logFilter: null }),
+    set({ execution: initialExecution, nodes: [], edges: [], logs: [], logFilter: null, summaryContent: '' }),
 
   handleEvent: (event) => {
     switch (event.type) {
@@ -110,17 +154,21 @@ export const useExecutionStore = create<StoreState>((set) => ({
             workflowName: event.payload.workflowName,
             workflowPath: event.payload.workflowPath,
             startedAt: event.payload.triggeredAt,
+            completedAt: null,
+            duration: null,
           },
+          selectedWorkflowPath: event.payload.workflowPath,
           logs: [],
           nodes: buildInitialNodes(event.payload),
           edges: buildInitialEdges(event.payload),
           currentView: 'graph',
           logFilter: null, // limpar filtro ao iniciar nova execução
+          summaryContent: '', // limpar summary da execução anterior
         }));
         break;
 
       case 'job:update': {
-        const { jobId, jobName, status, startedAt, completedAt, outerJobId } = event.payload;
+        const { jobId, jobName, status, startedAt, completedAt, duration, outerJobId } = event.payload;
         set((s) => {
           // Busca por id exato, label exato OU template match
           // (ex: "Build (dotnet)" casa com "Build (${{ needs.setup.outputs.language }})")
@@ -137,6 +185,7 @@ export const useExecutionStore = create<StoreState>((set) => ({
               id: jobId, type: 'job', label: jobName ?? jobId,
               parentId: outerJobId,
               status: status as NodeStatus, startedAt, completedAt,
+              duration: duration ?? calculateDuration(startedAt, completedAt),
             };
             return { nodes: [...s.nodes, newJob] };
           }
@@ -148,12 +197,16 @@ export const useExecutionStore = create<StoreState>((set) => ({
               // Resolver label de template para o nome real
               // ex: "Build (${{ needs.setup.outputs.language }})" → "Build (dotnet)"
               const resolvedLabel = matchesTemplate(jobId, n.label) ? (jobName ?? jobId) : n.label;
+              const nextStartedAt = startedAt ?? n.startedAt;
+              const nextCompletedAt = completedAt ?? n.completedAt;
+              const nextDuration = duration ?? n.duration ?? calculateDuration(nextStartedAt, nextCompletedAt);
               return {
                 ...n,
                 label: resolvedLabel,
                 status: (status as NodeStatus) ?? n.status,
                 ...(startedAt && { startedAt }),
                 ...(completedAt && { completedAt }),
+                ...(nextDuration !== undefined && { duration: nextDuration }),
               };
             }),
           };
@@ -217,14 +270,25 @@ export const useExecutionStore = create<StoreState>((set) => ({
         break;
 
       case 'execution:end': {
-        const { executionId, status: endStatus } = event.payload;
+        const { executionId, status: endStatus, completedAt } = event.payload;
         const nodeStatus: NodeStatus = endStatus === 'success' ? 'success' : 'failed';
         set((s) => ({
-          execution: { ...s.execution, status: endStatus },
+          execution: {
+            ...s.execution,
+            status: endStatus,
+            completedAt,
+            duration: event.payload.duration > 0
+              ? event.payload.duration
+              : calculateDuration(s.execution.startedAt ?? undefined, completedAt) ?? null,
+          },
           // Fallback: any node still in 'running' at execution end transitions to final state.
           nodes: endStatus === 'cancelled'
             ? s.nodes
-            : s.nodes.map((n) => n.status === 'running' ? { ...n, status: nodeStatus } : n),
+            : s.nodes.map((n) => {
+                if (n.status !== 'running') return n;
+                const duration = calculateDuration(n.startedAt, completedAt);
+                return { ...n, status: nodeStatus, completedAt, ...(duration !== undefined && { duration }) };
+              }),
           // Salvar os logs desta execução para exibir no histórico
           historyLogs: {
             ...s.historyLogs,
@@ -236,7 +300,12 @@ export const useExecutionStore = create<StoreState>((set) => ({
 
       case 'execution:error':
         set((s) => ({
-          execution: { ...s.execution, status: 'failed' },
+          execution: {
+            ...s.execution,
+            status: 'failed',
+            completedAt: new Date().toISOString(),
+            duration: calculateDuration(s.execution.startedAt ?? undefined, new Date().toISOString()) ?? s.execution.duration,
+          },
           logs: [
             ...s.logs,
             {
@@ -248,6 +317,10 @@ export const useExecutionStore = create<StoreState>((set) => ({
             },
           ],
         }));
+        break;
+
+      case 'summary:update':
+        set({ summaryContent: event.payload.content });
         break;
     }
   },
@@ -358,6 +431,17 @@ function updateNode(
     if (!isTarget) return n;
     // Don't downgrade a terminal state back to running
     if (update.status === 'running' && TERMINAL.includes(n.status)) return n;
-    return { ...n, ...update };
+    const nextStartedAt = update.startedAt ?? n.startedAt;
+    const nextCompletedAt = update.completedAt ?? n.completedAt;
+    const nextDuration = update.duration ?? n.duration ?? calculateDuration(nextStartedAt, nextCompletedAt);
+    return { ...n, ...update, ...(nextDuration !== undefined && { duration: nextDuration }) };
   });
+}
+
+function calculateDuration(startedAt?: string, completedAt?: string): number | undefined {
+  if (!startedAt || !completedAt) return undefined;
+  const started = new Date(startedAt).getTime();
+  const completed = new Date(completedAt).getTime();
+  if (!Number.isFinite(started) || !Number.isFinite(completed) || completed < started) return undefined;
+  return completed - started;
 }
