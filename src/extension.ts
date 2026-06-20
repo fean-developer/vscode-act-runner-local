@@ -207,7 +207,7 @@ function workspaceRoot(): string {
   );
 }
 
-function getWorkflowSummaries(): Array<{ name: string; filePath: string; fileName: string; jobs: number; valid: boolean; error?: string }> {
+function getWorkflowSummaries(): Array<{ name: string; filePath: string; fileName: string; jobs: number; valid: boolean; inputs: Array<{ name: string; description?: string; required: boolean; default?: string | number | boolean; type: 'string' | 'choice' | 'boolean' | 'number' | 'environment'; options?: string[] }>; error?: string }> {
   const root = workspaceRoot();
   if (!root) return [];
   return workflowParser.discoverWorkflows(root).map((filePath) => {
@@ -219,6 +219,7 @@ function getWorkflowSummaries(): Array<{ name: string; filePath: string; fileNam
         fileName: path.basename(filePath),
         jobs: Object.keys(workflow.jobs).length,
         valid: true,
+        inputs: getWorkflowDispatchInputs(workflow),
       };
     } catch (error) {
       return {
@@ -227,9 +228,34 @@ function getWorkflowSummaries(): Array<{ name: string; filePath: string; fileNam
         fileName: path.basename(filePath),
         jobs: 0,
         valid: false,
+        inputs: [],
         error: error instanceof Error ? error.message : String(error),
       };
     }
+  });
+}
+
+function getWorkflowDispatchInputs(workflow: WorkflowDefinition): Array<{ name: string; description?: string; required: boolean; default?: string | number | boolean; type: 'string' | 'choice' | 'boolean' | 'number' | 'environment'; options?: string[] }> {
+  const trigger = workflow.on;
+  if (!trigger || typeof trigger !== 'object' || Array.isArray(trigger)) return [];
+  const dispatch = (trigger as Record<string, unknown>).workflow_dispatch;
+  if (!dispatch || typeof dispatch !== 'object') return [];
+  const inputs = (dispatch as Record<string, unknown>).inputs;
+  if (!inputs || typeof inputs !== 'object' || Array.isArray(inputs)) return [];
+  return Object.entries(inputs as Record<string, unknown>).map(([name, raw]) => {
+    const config = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+    const rawType = typeof config.type === 'string' ? config.type : 'string';
+    const type = ['string', 'choice', 'boolean', 'number', 'environment'].includes(rawType)
+      ? rawType as 'string' | 'choice' | 'boolean' | 'number' | 'environment'
+      : 'string';
+    return {
+      name,
+      description: typeof config.description === 'string' ? config.description : undefined,
+      required: config.required === true,
+      default: typeof config.default === 'string' || typeof config.default === 'number' || typeof config.default === 'boolean' ? config.default : undefined,
+      type,
+      options: Array.isArray(config.options) ? config.options.map(String) : undefined,
+    };
   });
 }
 
@@ -396,7 +422,14 @@ function openWebviewPanel(context: vscode.ExtensionContext, initialView: string,
         const opts = msg.payload as Partial<ExecutionOptions>;
         const workflowPath = opts.workflowPath ?? (await pickWorkflow());
         if (!workflowPath) break;
-        await safeRun(() => executionEngine.run({ ...opts, workflowPath, workspaceRoot: workspaceRoot() }));
+        const workflowInputs = (msg.payload as { workflowInputs?: Record<string, string | number | boolean> }).workflowInputs;
+        const eventPayloadPath = workflowInputs ? createWorkflowDispatchPayload(workflowInputs) : opts.eventPayloadPath;
+        await safeRun(() => executionEngine.run({
+          ...opts,
+          workflowPath,
+          workspaceRoot: workspaceRoot(),
+          ...(workflowInputs && { eventType: 'workflow_dispatch', eventPayloadPath }),
+        }));
         break;
       }
       case 'command:quickRun': {
@@ -550,4 +583,14 @@ function openWebviewPanel(context: vscode.ExtensionContext, initialView: string,
   <script nonce="${nonce}" src="${scriptUri}"></script>
 </body>
 </html>`;
+}
+
+function createWorkflowDispatchPayload(inputs: Record<string, string | number | boolean>): string {
+  const filePath = path.join(os.tmpdir(), `act-workflow-dispatch-${Date.now()}.json`);
+  const payload = {
+    ref: 'refs/heads/main',
+    inputs,
+  };
+  require('fs').writeFileSync(filePath, JSON.stringify(payload, null, 2), 'utf-8');
+  return filePath;
 }

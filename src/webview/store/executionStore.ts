@@ -49,7 +49,17 @@ export interface WorkflowListItem {
   fileName: string;
   jobs: number;
   valid: boolean;
+  inputs: WorkflowInputItem[];
   error?: string;
+}
+
+export interface WorkflowInputItem {
+  name: string;
+  description?: string;
+  required: boolean;
+  default?: string | number | boolean;
+  type: 'string' | 'choice' | 'boolean' | 'number' | 'environment';
+  options?: string[];
 }
 
 export interface RepositoryInfo {
@@ -77,6 +87,7 @@ interface StoreState {
   // Workflows descobertos no projeto atual
   workflows: WorkflowListItem[];
   selectedWorkflowPath: string | null;
+  workflowRunDialogPath: string | null;
   repository: RepositoryInfo | null;
   // Logs por execução (salvo ao final de cada execução, para exibir no histórico)
   historyLogs: Record<string, string[]>;
@@ -95,6 +106,8 @@ interface StoreState {
   setWorkflows: (records: WorkflowListItem[]) => void;
   setRepository: (repository: RepositoryInfo | null) => void;
   setSelectedWorkflowPath: (workflowPath: string | null) => void;
+  openWorkflowRunDialog: (workflowPath: string) => void;
+  closeWorkflowRunDialog: () => void;
   setLogFilter: (filter: { jobId: string; stepLabel?: string; label: string } | null) => void;
 }
 
@@ -119,6 +132,7 @@ export const useExecutionStore = create<StoreState>((set) => ({
   history: [],
   workflows: [],
   selectedWorkflowPath: null,
+  workflowRunDialogPath: null,
   repository: null,
   historyLogs: {},
   logFilter: null,
@@ -138,6 +152,10 @@ export const useExecutionStore = create<StoreState>((set) => ({
   setRepository: (repository) => set({ repository }),
 
   setSelectedWorkflowPath: (workflowPath) => set({ selectedWorkflowPath: workflowPath }),
+
+  openWorkflowRunDialog: (workflowPath) => set({ workflowRunDialogPath: workflowPath }),
+
+  closeWorkflowRunDialog: () => set({ workflowRunDialogPath: null }),
 
   setLogFilter: (filter) => set({ logFilter: filter }),
 

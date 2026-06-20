@@ -2,7 +2,7 @@ import React from 'react';
 import { useExecutionStore, type WorkflowListItem } from '../store/executionStore';
 
 export function WorkflowLauncherSidebar() {
-  const { workflows, selectedWorkflowPath, repository, setSelectedWorkflowPath } = useExecutionStore();
+  const { workflows, selectedWorkflowPath, repository, setSelectedWorkflowPath, openWorkflowRunDialog } = useExecutionStore();
 
   const selectRepository = () => {
     window.__vscode__?.postMessage({ type: 'command:selectProject', payload: {} });
@@ -11,6 +11,10 @@ export function WorkflowLauncherSidebar() {
   const runWorkflow = (workflow: WorkflowListItem) => {
     if (!workflow.valid) return;
     setSelectedWorkflowPath(workflow.filePath);
+    if (workflow.inputs.length > 0) {
+      openWorkflowRunDialog(workflow.filePath);
+      return;
+    }
     window.__vscode__?.postMessage({ type: 'command:run', payload: { workflowPath: workflow.filePath } });
   };
 
@@ -39,7 +43,7 @@ export function WorkflowLauncherSidebar() {
             <button
               key={workflow.filePath}
               type="button"
-              title={workflow.valid ? `Executar ${workflow.fileName}` : workflow.error}
+              title={workflow.valid ? `Executar ${workflow.fileName}${workflow.inputs.length ? ' com inputs' : ''}` : workflow.error}
               style={{
                 ...styles.item,
                 ...(active ? styles.itemActive : {}),
@@ -50,7 +54,7 @@ export function WorkflowLauncherSidebar() {
               <span style={styles.icon}>{workflow.valid ? '▶' : '!'}</span>
               <span style={styles.itemText}>
                 <span style={styles.itemName}>{workflow.name}</span>
-                <span style={styles.itemMeta}>{workflow.fileName} · {workflow.jobs} job{workflow.jobs === 1 ? '' : 's'}</span>
+                <span style={styles.itemMeta}>{workflow.fileName} · {workflow.jobs} job{workflow.jobs === 1 ? '' : 's'}{workflow.inputs.length ? ` · ${workflow.inputs.length} input${workflow.inputs.length === 1 ? '' : 's'}` : ''}</span>
               </span>
             </button>
           );
