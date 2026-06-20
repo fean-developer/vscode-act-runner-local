@@ -9,6 +9,10 @@ import { EnvEditor } from './components/EnvEditor';
 import { ControlBar } from './components/ControlBar';
 import { LogPanel } from './components/LogPanel';
 import { ExecutionSidebar } from './components/ExecutionSidebar';
+import { SummaryPanel } from './components/SummaryPanel';
+import { RunSummaryHeader } from './components/RunSummaryHeader';
+import { AnalyticsPanel } from './components/AnalyticsPanel';
+import { WorkflowLauncherSidebar } from './components/WorkflowLauncherSidebar';
 
 declare global {
   interface Window {
@@ -20,7 +24,7 @@ declare global {
 }
 
 export function App() {
-  const { currentView, setView, handleEvent, setHistory } = useExecutionStore();
+  const { currentView, setView, handleEvent, setHistory, setWorkflows, setRepository } = useExecutionStore();
   const [logHeight, setLogHeight] = useState(200);
 
   const startResize = useCallback((e: React.MouseEvent) => {
@@ -61,6 +65,12 @@ export function App() {
         if (msg.payload.history) {
           setHistory(msg.payload.history as Parameters<typeof setHistory>[0]);
         }
+        if (msg.payload.workflows) {
+          setWorkflows(msg.payload.workflows as Parameters<typeof setWorkflows>[0]);
+        }
+        if ('repository' in msg.payload) {
+          setRepository(msg.payload.repository as Parameters<typeof setRepository>[0]);
+        }
         return;
       }
 
@@ -74,7 +84,7 @@ export function App() {
     window.__vscode__?.postMessage({ type: 'state:request', payload: {} });
 
     return () => window.removeEventListener('message', handler);
-  }, [handleEvent, setHistory, setView]);
+  }, [handleEvent, setHistory, setView, setWorkflows, setRepository]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
@@ -82,8 +92,10 @@ export function App() {
       <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         {currentView === 'graph' && (
           <>
+            <RunSummaryHeader />
             {/* Área principal: sidebar (navigator) + grafo (status) */}
             <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}>
+              <WorkflowLauncherSidebar />
               <ExecutionSidebar />
               <WorkflowGraph />
             </div>
@@ -104,7 +116,13 @@ export function App() {
           </>
         )}
         {currentView === 'history' && <HistoryPanel />}
+        {currentView === 'analytics' && <AnalyticsPanel />}
         {currentView === 'env' && <EnvEditor />}
+        {currentView === 'summary' && (
+          <div style={{ flex: 1, overflow: 'auto', padding: '8px 0' }}>
+            <SummaryPanel />
+          </div>
+        )}
       </div>
     </div>
   );

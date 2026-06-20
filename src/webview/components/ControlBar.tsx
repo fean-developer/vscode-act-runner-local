@@ -5,13 +5,14 @@ import { useExecutionStore } from '../store/executionStore';
  * Barra de controle superior com botões de execução e navegação.
  */
 export function ControlBar() {
-  const { currentView, setView, execution } = useExecutionStore();
+  const { currentView, setView, execution, summaryContent, selectedWorkflowPath } = useExecutionStore();
+  const hasSummary = !!summaryContent;
 
   const send = (type: string, payload: Record<string, unknown> = {}) =>
     window.__vscode__?.postMessage({ type, payload });
 
   // Inclui workflowPath nas execuções iniciadas pelo webview
-  const runPayload = execution.workflowPath ? { workflowPath: execution.workflowPath } : {};
+  const runPayload = { workflowPath: execution.workflowPath ?? selectedWorkflowPath ?? undefined };
   const isRunning = execution.status === 'running';
 
   return (
@@ -32,7 +33,7 @@ export function ControlBar() {
         </button>
       </div>
       <div style={styles.right}>
-        {(['graph', 'history', 'env'] as const).map((view) => (
+        {(['graph', 'history', 'analytics', 'env'] as const).map((view) => (
           <button
             key={view}
             style={{ ...styles.tab, ...(currentView === view ? styles.tabActive : {}) }}
@@ -41,13 +42,23 @@ export function ControlBar() {
             {VIEW_LABELS[view]}
           </button>
         ))}
+        <button
+          style={{
+            ...styles.tab,
+            ...(currentView === 'summary' ? styles.tabActive : {}),
+            ...(hasSummary && currentView !== 'summary' ? styles.tabSummaryHighlight : {}),
+          }}
+          onClick={() => setView('summary')}
+        >
+          📋 Summary
+        </button>
       </div>
     </div>
   );
 }
 
 const VIEW_LABELS: Record<string, string> = {
-  graph: '🗺 Grafo', history: '📜 Histórico', env: '🔐 Variáveis',
+  graph: '🗺 Grafo', history: '📜 Histórico', analytics: '📊 Analytics', env: '🔐 Variáveis',
 };
 
 const styles: Record<string, React.CSSProperties> = {
@@ -79,4 +90,5 @@ const styles: Record<string, React.CSSProperties> = {
     background: 'transparent', color: '#8b949e', cursor: 'pointer', fontSize: 11,
   },
   tabActive: { background: '#21262d', color: '#e6edf3', borderColor: '#484f58' },
+  tabSummaryHighlight: { borderColor: '#238636', color: '#3fb950' },
 };

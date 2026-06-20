@@ -406,7 +406,11 @@ function transitiveReduction(
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function WorkflowGraph() {
+interface WorkflowGraphProps {
+  showHeader?: boolean;
+}
+
+export function WorkflowGraph({ showHeader = true }: WorkflowGraphProps) {
   const { nodes, edges, execution, logFilter, setLogFilter } = useExecutionStore((s) => ({
     nodes: s.nodes,
     edges: s.edges,
@@ -538,18 +542,19 @@ export function WorkflowGraph() {
 
   return (
     <div style={styles.container}>
-      {/* Header bar */}
-      <div style={styles.header}>
-        <span style={{ fontWeight: 600, color: '#e6edf3' }}>{execution.workflowName || 'Workflow'}</span>
-        <div style={styles.summary}>
-          {runningCount > 0 && <span style={{ color: '#fb923c' }}>◉ {runningCount} em execução</span>}
-          {successCount > 0 && <span style={{ color: '#3fb950' }}>✓ {successCount} concluído{successCount > 1 ? 's' : ''}</span>}
-          {failedCount  > 0 && <span style={{ color: '#f85149' }}>✕ {failedCount} falhou{failedCount > 1 ? 'ram' : ''}</span>}
-          <span style={{ color: '#6e7681', fontSize: 11 }}>
-            {allJobs.length} job{allJobs.length !== 1 ? 's' : ''} · {steps.length} step{steps.length !== 1 ? 's' : ''}
-          </span>
+      {showHeader && (
+        <div style={styles.header}>
+          <span style={{ fontWeight: 600, color: '#e6edf3' }}>{execution.workflowName || 'Workflow'}</span>
+          <div style={styles.summary}>
+            {runningCount > 0 && <span style={{ color: '#fb923c' }}>◉ {runningCount} em execução</span>}
+            {successCount > 0 && <span style={{ color: '#3fb950' }}>✓ {successCount} concluído{successCount > 1 ? 's' : ''}</span>}
+            {failedCount  > 0 && <span style={{ color: '#f85149' }}>✕ {failedCount} falhou{failedCount > 1 ? 'ram' : ''}</span>}
+            <span style={{ color: '#6e7681', fontSize: 11 }}>
+              {allJobs.length} job{allJobs.length !== 1 ? 's' : ''} · {steps.length} step{steps.length !== 1 ? 's' : ''}
+            </span>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Área scrollável com canvas absoluto */}
       <div style={{ flex: 1, overflow: 'auto', background: '#0d1117' }}>

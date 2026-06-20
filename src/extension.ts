@@ -14,6 +14,7 @@ import { workflowCodeLensProvider } from './providers/codeLensProvider';
 import { StatusBarController } from './providers/statusBarController';
 import type { WebviewCommand } from './types/events.types';
 import type { ExecutionOptions } from './types/execution.types';
+import type { WorkflowDefinition } from './types/workflow.types';
 
 let webviewPanel: vscode.WebviewPanel | undefined;
 /** Execução pendente: inicia quando o webview enviar state:request (React montado) */
@@ -32,7 +33,12 @@ export function activate(context: vscode.ExtensionContext): void {
     treeDataProvider: workflowExplorer,
     showCollapseAll: true,
   });
-  context.subscriptions.push(treeView);
+  const treeVisibilityDisposable = treeView.onDidChangeVisibility((event) => {
+    if (!event.visible) return;
+    openWebviewPanel(context, 'graph');
+    vscode.commands.executeCommand('workbench.action.closeSidebar');
+  });
+  context.subscriptions.push(treeView, treeVisibilityDisposable);
 
   // CodeLens nos arquivos YAML
   context.subscriptions.push(
@@ -44,9 +50,13 @@ export function activate(context: vscode.ExtensionContext): void {
 
   // Watcher para atualizar o explorer ao mudar workflows
   const watcher = vscode.workspace.createFileSystemWatcher('**/.github/workflows/*.{yml,yaml}');
-  watcher.onDidCreate(() => workflowExplorer.refresh());
-  watcher.onDidDelete(() => workflowExplorer.refresh());
-  watcher.onDidChange(() => workflowExplorer.refresh());
+  const refreshWorkflows = () => {
+    workflowExplorer.refresh();
+    sendWorkflowSnapshot();
+  };
+  watcher.onDidCreate(refreshWorkflows);
+  watcher.onDidDelete(refreshWorkflows);
+  watcher.onDidChange(refreshWorkflows);
   context.subscriptions.push(watcher);
 
   // --- Registro de Comandos ---
@@ -122,36 +132,7 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     vscode.commands.registerCommand('actRunner.refreshExplorer', () => workflowExplorer.refresh()),
 
-    vscode.commands.registerCommand('actRunner.selectProject', async () => {
-      // Começar no workspace atual ou no home
-      const startDir =
-        vscode.workspace.workspaceFolders?.[0]?.uri ??
-        vscode.Uri.file(require('os').homedir());
-
-      const uris = await vscode.window.showOpenDialog({
-        canSelectFolders: true,
-        canSelectFiles: false,
-        canSelectMany: false,
-        openLabel: 'Selecionar pasta raiz do projeto',
-        title: 'Selecione a pasta que contém .github/workflows/',
-        defaultUri: startDir,
-      });
-      if (!uris || uris.length === 0) return;
-      const root = uris[0].fsPath;
-      workflowExplorer.setProjectRoot(root);
-      envManager.ensureSecretsIgnored(root);
-
-      // Verificar se tem workflows no caminho selecionado
-      const found = workflowParser.discoverWorkflows(root);
-      if (found.length === 0) {
-        vscode.window.showWarningMessage(
-          `⚠️ Nenhum workflow encontrado em ${root}/.github/workflows/`,
-          'Selecionar outra pasta'
-        ).then((c) => { if (c) vscode.commands.executeCommand('actRunner.selectProject'); });
-      } else {
-        vscode.window.showInformationMessage(`✅ Projeto selecionado: ${root} (${found.length} workflow(s))`);
-      }
-    }),
+    vscode.commands.registerCommand('actRunner.selectProject', () => selectProjectFromUser()),
 
     vscode.commands.registerCommand('actRunner.locateAct', async () => {
       // Tentar auto-detect antes de pedir ao usuário
@@ -224,6 +205,77 @@ function workspaceRoot(): string {
     vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ??
     ''
   );
+}
+
+function getWorkflowSummaries(): Array<{ name: string; filePath: string; fileName: string; jobs: number; valid: boolean; error?: string }> {
+  const root = workspaceRoot();
+  if (!root) return [];
+  return workflowParser.discoverWorkflows(root).map((filePath) => {
+    try {
+      const workflow: WorkflowDefinition = workflowParser.parse(filePath);
+      return {
+        name: workflow.name,
+        filePath,
+        fileName: path.basename(filePath),
+        jobs: Object.keys(workflow.jobs).length,
+        valid: true,
+      };
+    } catch (error) {
+      return {
+        name: path.basename(filePath, path.extname(filePath)),
+        filePath,
+        fileName: path.basename(filePath),
+        jobs: 0,
+        valid: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  });
+}
+
+function getRepositorySnapshot(): { root: string; name: string } | null {
+  const root = workspaceRoot();
+  if (!root) return null;
+  return { root, name: path.basename(root) };
+}
+
+function sendWorkflowSnapshot(): void {
+  webviewPanel?.webview.postMessage({
+    type: 'state:snapshot',
+    payload: { workflows: getWorkflowSummaries(), repository: getRepositorySnapshot() },
+  });
+}
+
+async function selectProjectFromUser(): Promise<void> {
+  // Começar no workspace atual, projeto selecionado ou no home
+  const currentRoot = workspaceRoot();
+  const startDir = currentRoot
+    ? vscode.Uri.file(currentRoot)
+    : vscode.workspace.workspaceFolders?.[0]?.uri ?? vscode.Uri.file(require('os').homedir());
+
+  const uris = await vscode.window.showOpenDialog({
+    canSelectFolders: true,
+    canSelectFiles: false,
+    canSelectMany: false,
+    openLabel: 'Selecionar repositório',
+    title: 'Selecione o repositório que contém .github/workflows/',
+    defaultUri: startDir,
+  });
+  if (!uris || uris.length === 0) return;
+  const root = uris[0].fsPath;
+  workflowExplorer.setProjectRoot(root);
+  envManager.ensureSecretsIgnored(root);
+  sendWorkflowSnapshot();
+
+  const found = workflowParser.discoverWorkflows(root);
+  if (found.length === 0) {
+    vscode.window.showWarningMessage(
+      `⚠️ Nenhum workflow encontrado em ${root}/.github/workflows/`,
+      'Selecionar outra pasta'
+    ).then((choice) => { if (choice) vscode.commands.executeCommand('actRunner.selectProject'); });
+  } else {
+    vscode.window.showInformationMessage(`✅ Repositório selecionado: ${root} (${found.length} workflow(s))`);
+  }
 }
 
 async function showMainMenu(): Promise<void> {
@@ -316,8 +368,9 @@ async function safeRun(fn: () => Promise<unknown>): Promise<void> {
 function openWebviewPanel(context: vscode.ExtensionContext, initialView: string, onReady?: () => void): void {
   if (webviewPanel) {
     // Painel já existe: revelar e iniciar execução diretamente (webview já está montado)
-    webviewPanel.reveal();
+    webviewPanel.reveal(vscode.ViewColumn.One);
     webviewPanel.webview.postMessage({ type: 'navigate', payload: { view: initialView } });
+    sendWorkflowSnapshot();
     if (onReady) onReady();
     return;
   }
@@ -327,7 +380,7 @@ function openWebviewPanel(context: vscode.ExtensionContext, initialView: string,
   webviewPanel = vscode.window.createWebviewPanel(
     'actVisualRunner',
     'Act Visual Runner',
-    vscode.ViewColumn.Beside,
+    vscode.ViewColumn.One,
     {
       enableScripts: true,
       localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, 'dist', 'webview')],
@@ -359,6 +412,9 @@ function openWebviewPanel(context: vscode.ExtensionContext, initialView: string,
         break;
       case 'command:locateAct':
         vscode.commands.executeCommand('actRunner.locateAct');
+        break;
+      case 'command:selectProject':
+        await selectProjectFromUser();
         break;
       case 'command:rerun': {
         const record = historyService.getById(msg.payload.executionId);
@@ -448,7 +504,7 @@ function openWebviewPanel(context: vscode.ExtensionContext, initialView: string,
       case 'state:request':
         webviewPanel?.webview.postMessage({
           type: 'state:snapshot',
-          payload: { history: historyService.getAll() },
+          payload: { history: historyService.getAll(), workflows: getWorkflowSummaries(), repository: getRepositorySnapshot() },
         });
         // Webview está pronto (React montou): disparar execução pendente, se houver
         if (pendingExecution) {

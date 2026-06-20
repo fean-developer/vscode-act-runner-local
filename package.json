@@ -2,12 +2,12 @@
   "name": "act-visual-runner",
   "displayName": "Act/Run - GitHub Actions Visual locally",
   "description": "Execute GitHub Actions localmente com interface visual estilo n8n usando nektos/act",
-  "version": "1.0.1",
+  "version": "2.0.0",
   "publisher": "fean-developer",
   "engines": {
     "vscode": "^1.85.0"
   },
-   "repository": {
+  "repository": {
     "type": "git",
     "url": "https://github.com/fean-developer/vscode-act-runner-local.git"
   },
