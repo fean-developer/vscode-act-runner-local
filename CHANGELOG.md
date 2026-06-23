@@ -1,5 +1,21 @@
 # Changelog
 
+## v2.10.2
+
+### Adicionado
+
+- Adicionado seletor/editável de caminho também para arquivos `.env` e `.secrets` na tela **Variáveis**.
+
+### Alterado
+
+- A execução agora resolve `--var-file` a partir do projeto selecionado, mesmo quando o `act` roda a partir de um diretório pai.
+- A execução agora detecta e passa automaticamente `--secret-file` a partir do projeto selecionado, mesmo quando o `act` roda a partir de um diretório pai.
+
+### Corrigido
+
+- Corrigido erro ao salvar `.vars` ou arquivos selecionados quando a configuração `actRunner.varFile` ainda não estava registrada na sessão ativa do VS Code.
+- Corrigido mascaramento parcial na aba `.secrets`; agora todos os valores ficam ocultos por padrão.
+
 ## v2.10.1
 
 ### Adicionado

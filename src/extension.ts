@@ -23,6 +23,7 @@ let pendingExecution: (() => void) | undefined;
 
 export function activate(context: vscode.ExtensionContext): void {
   historyService.initialize(context);
+  envManager.initialize(context);
 
   // Status bar
   const statusBar = new StatusBarController();
@@ -482,14 +483,12 @@ function openWebviewPanel(context: vscode.ExtensionContext, initialView: string,
             }
           } else {
             const filePath = tab === 'env'
-              ? envManager.getEnvFilePath(root)
+              ? (clientFilePath?.trim() ? path.resolve(root, clientFilePath.trim()) : envManager.getEnvFilePath(root))
               : tab === 'vars'
                 ? (clientFilePath?.trim() ? path.resolve(root, clientFilePath.trim()) : envManager.getVarFilePath(root))
-                : envManager.getSecretsFilePath(root);
-            if (tab === 'vars' && clientFilePath?.trim()) {
-              await vscode.workspace
-                .getConfiguration('actRunner')
-                .update('varFile', envManager.toWorkspaceRelative(root, filePath), vscode.ConfigurationTarget.Workspace);
+                : clientFilePath?.trim() ? path.resolve(root, clientFilePath.trim()) : envManager.getSecretsFilePath(root);
+            if (clientFilePath?.trim()) {
+              await rememberEnvFilePath(root, tab, filePath);
             }
             foundFilePath = filePath;
             const map = envManager.read(filePath);
@@ -520,19 +519,17 @@ function openWebviewPanel(context: vscode.ExtensionContext, initialView: string,
           } else {
             const requestedFilePath = clientFilePath?.trim();
             const filePath = tab === 'env'
-              ? envManager.getEnvFilePath(root)
+              ? (requestedFilePath ? path.resolve(root, requestedFilePath) : envManager.getEnvFilePath(root))
               : tab === 'vars'
                 ? (requestedFilePath ? path.resolve(root, requestedFilePath) : envManager.getVarFilePath(root))
-                : envManager.getSecretsFilePath(root);
-            if (tab === 'vars' && requestedFilePath) {
-              await vscode.workspace
-                .getConfiguration('actRunner')
-                .update('varFile', envManager.toWorkspaceRelative(root, filePath), vscode.ConfigurationTarget.Workspace);
-            }
+                : requestedFilePath ? path.resolve(root, requestedFilePath) : envManager.getSecretsFilePath(root);
             const map = new Map(
               rows.filter((r) => r.key.trim()).map((r) => [r.key.trim(), r.value])
             );
             envManager.write(filePath, map);
+            if (requestedFilePath) {
+              await rememberEnvFilePath(root, tab, filePath);
+            }
           }
           vscode.window.showInformationMessage(`✅ ${tab === 'vars' ? 'vars' : `.${tab}`} salvo com sucesso.`);
         } catch (e) {
@@ -598,6 +595,12 @@ function openWebviewPanel(context: vscode.ExtensionContext, initialView: string,
   <script nonce="${nonce}" src="${scriptUri}"></script>
 </body>
 </html>`;
+}
+
+async function rememberEnvFilePath(root: string, tab: string, filePath: string): Promise<void> {
+  if (tab === 'env') await envManager.rememberFilePath(root, 'envFile', filePath);
+  if (tab === 'vars') await envManager.rememberFilePath(root, 'varFile', filePath);
+  if (tab === 'secrets') await envManager.rememberFilePath(root, 'secretsFile', filePath);
 }
 
 function createWorkflowDispatchPayload(inputs: Record<string, string | number | boolean>): string {

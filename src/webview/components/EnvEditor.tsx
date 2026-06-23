@@ -3,9 +3,6 @@ import React, { useState, useEffect } from 'react';
 type Tab = 'env' | 'vars' | 'secrets' | 'actrc';
 
 interface EnvEntry { key: string; value: string }
-
-const SECRET_KEY_PATTERN = /token|password|secret|key|auth|credential/i;
-
 export function EnvEditor() {
   const [tab, setTab] = useState<Tab>('env');
   const [rows, setRows] = useState<EnvEntry[]>([]);
@@ -48,7 +45,7 @@ export function EnvEditor() {
   const removeRow = (i: number) => setRows((r) => r.filter((_, idx) => idx !== i));
 
   const isSecret = tab === 'secrets';
-  const canEditFilePath = tab === 'vars';
+  const canEditFilePath = tab === 'env' || tab === 'vars' || tab === 'secrets';
 
   return (
     <div style={styles.container}>
@@ -71,12 +68,12 @@ export function EnvEditor() {
 
       {canEditFilePath ? (
         <label style={styles.filePathEditor}>
-          <span style={styles.filePathLabel}>Arquivo de vars</span>
+          <span style={styles.filePathLabel}>Arquivo de {FILE_KIND_LABELS[tab]}</span>
           <span style={styles.filePathRow}>
             <input
               style={styles.filePathInput}
               value={filePath}
-              placeholder=".vars ou my.variables"
+              placeholder={FILE_PLACEHOLDERS[tab]}
               onChange={(e) => setFilePath(e.target.value)}
             />
             <button style={styles.btnSecondary} onClick={loadCurrentFile}>Carregar</button>
@@ -103,7 +100,7 @@ export function EnvEditor() {
               {tab !== 'actrc' && (
                 <input
                   style={styles.input}
-                  type={(isSecret && !visible && SECRET_KEY_PATTERN.test(row.key)) ? 'password' : 'text'}
+                  type={isSecret && !visible ? 'password' : 'text'}
                   value={row.value}
                   placeholder="valor"
                   onChange={(e) => updateRow(i, 'value', e.target.value)}
@@ -124,6 +121,8 @@ export function EnvEditor() {
 }
 
 const TAB_LABELS: Record<Tab, string> = { env: '.env', vars: '.vars', secrets: '.secrets', actrc: '.actrc' };
+const FILE_KIND_LABELS: Record<Tab, string> = { env: 'env', vars: 'vars', secrets: 'secrets', actrc: 'actrc' };
+const FILE_PLACEHOLDERS: Record<Tab, string> = { env: '.env ou my.env', vars: '.vars ou my.variables', secrets: '.secrets ou config/local.secrets', actrc: '.actrc' };
 
 const styles: Record<string, React.CSSProperties> = {
   container: { flex: 1, overflow: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 12 },

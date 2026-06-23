@@ -162,6 +162,7 @@ export class ExecutionEngine {
         workflowName: workflow.name,
         envFile: options.envFile ?? findConfiguredOrExistingFile(workspaceRoot, envManager.getEnvFilePath(workspaceRoot), ['.env']),
         varFile: options.varFile ?? findConfiguredOrExistingFile(workspaceRoot, envManager.getVarFilePath(workspaceRoot), ['.vars', '.env']),
+        secretsFile: options.secretsFile ?? findConfiguredOrExistingFile(workspaceRoot, envManager.getSecretsFilePath(workspaceRoot), ['.secrets']),
       });
       finalStatus = 'success';
     } catch (err) {

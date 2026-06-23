@@ -122,4 +122,97 @@ describe('ExecutionEngine', () => {
       })
     );
   });
+
+  it('usa .vars do projeto selecionado mesmo quando actCwd é o diretório pai', async () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'act-runner-root-'));
+    const apiRoot = path.join(repoRoot, 'Sandbox', 'api');
+    fs.mkdirSync(apiRoot, { recursive: true });
+    const varsPath = path.join(apiRoot, '.vars');
+    fs.writeFileSync(varsPath, 'RUNNER=ubuntu-latest\n');
+
+    try {
+      await engine.run({ workflowPath: '.github/workflows/ci.yml', workspaceRoot: apiRoot, actCwd: repoRoot });
+
+      expect(actRunner.run).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          actCwd: repoRoot,
+          workspaceRoot: apiRoot,
+          varFile: varsPath,
+        })
+      );
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('usa arquivo customizado de vars do projeto selecionado quando actCwd é o diretório pai', async () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'act-runner-root-'));
+    const apiRoot = path.join(repoRoot, 'Sandbox', 'api');
+    fs.mkdirSync(apiRoot, { recursive: true });
+    (vscode.workspace.getConfiguration as jest.Mock).mockReturnValue({
+      get: jest.fn((key: string, defaultValue: unknown) => key === 'varFile' ? 'config/local.variables' : defaultValue),
+      update: jest.fn().mockResolvedValue(undefined),
+    });
+    const customVarsPath = path.join(apiRoot, 'config', 'local.variables');
+    fs.mkdirSync(path.dirname(customVarsPath), { recursive: true });
+    fs.writeFileSync(customVarsPath, 'RUNNER=ubuntu-latest\n');
+
+    try {
+      await engine.run({ workflowPath: '.github/workflows/ci.yml', workspaceRoot: apiRoot, actCwd: repoRoot });
+
+      expect(actRunner.run).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          actCwd: repoRoot,
+          workspaceRoot: apiRoot,
+          varFile: customVarsPath,
+        })
+      );
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('usa .secrets do projeto selecionado mesmo quando actCwd é o diretório pai', async () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'act-runner-root-'));
+    const apiRoot = path.join(repoRoot, 'Sandbox', 'api');
+    fs.mkdirSync(apiRoot, { recursive: true });
+    const secretsPath = path.join(apiRoot, '.secrets');
+    fs.writeFileSync(secretsPath, 'TOKEN=local-secret\n');
+
+    try {
+      await engine.run({ workflowPath: '.github/workflows/ci.yml', workspaceRoot: apiRoot, actCwd: repoRoot });
+
+      expect(actRunner.run).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          actCwd: repoRoot,
+          workspaceRoot: apiRoot,
+          secretsFile: secretsPath,
+        })
+      );
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('usa arquivo customizado configurado como secretsFile', async () => {
+    (vscode.workspace.getConfiguration as jest.Mock).mockReturnValue({
+      get: jest.fn((key: string, defaultValue: unknown) => key === 'secretsFile' ? 'config/local.secrets' : defaultValue),
+      update: jest.fn().mockResolvedValue(undefined),
+    });
+    const customSecretsPath = path.join(tempRoot, 'config', 'local.secrets');
+    fs.mkdirSync(path.dirname(customSecretsPath), { recursive: true });
+    fs.writeFileSync(customSecretsPath, 'TOKEN=local-secret\n');
+
+    await engine.run({ workflowPath: '.github/workflows/ci.yml', workspaceRoot: tempRoot });
+
+    expect(actRunner.run).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        secretsFile: customSecretsPath,
+      })
+    );
+  });
 });
