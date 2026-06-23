@@ -464,7 +464,7 @@ function openWebviewPanel(context: vscode.ExtensionContext, initialView: string,
         break;
       }
       case 'command:loadEnv': {
-        const { tab } = msg.payload as { tab: string };
+        const { tab, filePath: clientFilePath } = msg.payload as { tab: string; filePath?: string };
         const root = workspaceRoot();
         let rows: { key: string; value: string }[] = [];
         let foundFilePath = '';
@@ -483,7 +483,14 @@ function openWebviewPanel(context: vscode.ExtensionContext, initialView: string,
           } else {
             const filePath = tab === 'env'
               ? envManager.getEnvFilePath(root)
-              : envManager.getSecretsFilePath(root);
+              : tab === 'vars'
+                ? (clientFilePath?.trim() ? path.resolve(root, clientFilePath.trim()) : envManager.getVarFilePath(root))
+                : envManager.getSecretsFilePath(root);
+            if (tab === 'vars' && clientFilePath?.trim()) {
+              await vscode.workspace
+                .getConfiguration('actRunner')
+                .update('varFile', envManager.toWorkspaceRelative(root, filePath), vscode.ConfigurationTarget.Workspace);
+            }
             foundFilePath = filePath;
             const map = envManager.read(filePath);
             rows = Array.from(map.entries()).map(([key, value]) => ({ key, value }));
@@ -511,17 +518,25 @@ function openWebviewPanel(context: vscode.ExtensionContext, initialView: string,
               .join('\n');
             require('fs').writeFileSync(filePath, content + '\n', 'utf-8');
           } else {
+            const requestedFilePath = clientFilePath?.trim();
             const filePath = tab === 'env'
               ? envManager.getEnvFilePath(root)
-              : envManager.getSecretsFilePath(root);
+              : tab === 'vars'
+                ? (requestedFilePath ? path.resolve(root, requestedFilePath) : envManager.getVarFilePath(root))
+                : envManager.getSecretsFilePath(root);
+            if (tab === 'vars' && requestedFilePath) {
+              await vscode.workspace
+                .getConfiguration('actRunner')
+                .update('varFile', envManager.toWorkspaceRelative(root, filePath), vscode.ConfigurationTarget.Workspace);
+            }
             const map = new Map(
               rows.filter((r) => r.key.trim()).map((r) => [r.key.trim(), r.value])
             );
             envManager.write(filePath, map);
           }
-          vscode.window.showInformationMessage(`✅ .${tab} salvo com sucesso.`);
+          vscode.window.showInformationMessage(`✅ ${tab === 'vars' ? 'vars' : `.${tab}`} salvo com sucesso.`);
         } catch (e) {
-          vscode.window.showErrorMessage(`Erro ao salvar .${tab}: ${e instanceof Error ? e.message : e}`);
+          vscode.window.showErrorMessage(`Erro ao salvar ${tab === 'vars' ? 'vars' : `.${tab}`}: ${e instanceof Error ? e.message : e}`);
         }
         break;
       }

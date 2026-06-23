@@ -11,7 +11,7 @@ describe('WorkflowParser', () => {
       expect(wf.name).toBe('CI Node.js');
       expect(wf.jobs).toBeDefined();
       expect(Object.keys(wf.jobs)).toContain('build');
-      expect(wf.jobs['build'].runsOn).toBe('ubuntu-latest');
+      expect(wf.jobs['build']['runs-on']).toBe('ubuntu-latest');
     });
 
     it('deve parsear um workflow multi-job', async () => {
@@ -24,7 +24,7 @@ describe('WorkflowParser', () => {
     });
 
     it('deve lançar erro para arquivo inexistente', async () => {
-      await expect(workflowParser.parse('/nao/existe.yml')).rejects.toThrow();
+      expect(() => workflowParser.parse('/nao/existe.yml')).toThrow();
     });
   });
 

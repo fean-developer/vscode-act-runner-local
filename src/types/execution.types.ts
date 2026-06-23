@@ -48,6 +48,7 @@ export interface ExecutionOptions {
   eventPayloadPath?: string;
   dryRun?: boolean;
   envFile?: string;
+  varFile?: string;
   secretsFile?: string;
   trigger?: ExecutionTrigger;
   workspaceRoot?: string;  // pasta raiz do projeto (sobrepõe workspace do VSCode)

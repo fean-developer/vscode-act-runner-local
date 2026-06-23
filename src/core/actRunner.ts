@@ -583,6 +583,7 @@ export class ActRunner {
     if (options.eventType)    args.push(sanitizeArg(options.eventType));
     if (options.eventPayloadPath) args.push('-e', sanitizePath(options.eventPayloadPath));
     if (options.envFile)      args.push('--env-file', sanitizePath(options.envFile));
+    if (options.varFile)      args.push('--var-file', sanitizePath(options.varFile));
     if (options.secretsFile)  args.push('--secret-file', sanitizePath(options.secretsFile));
 
     // Passa --rm para que act remova o container automaticamente ao finalizar

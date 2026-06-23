@@ -4,25 +4,33 @@ import { actRunner } from '../core/actRunner';
 import { workflowParser } from '../core/workflowParser';
 import { workflowValidator } from '../core/workflowValidator';
 import { historyService } from '../core/historyService';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+import * as vscode from 'vscode';
 
 jest.mock('../core/actRunner');
 jest.mock('../core/workflowParser');
 jest.mock('../core/workflowValidator');
 jest.mock('../core/historyService');
 jest.mock('../core/eventBus', () => ({
-  eventBus: { dispatch: jest.fn(), on: jest.fn(), off: jest.fn() },
+  eventBus: { dispatch: jest.fn(), sendSnapshot: jest.fn(), on: jest.fn(), off: jest.fn() },
 }));
-
-const { EventEmitter } = require('events');
 
 describe('ExecutionEngine', () => {
   let engine: ExecutionEngine;
+  let tempRoot: string;
 
   beforeEach(() => {
     engine = new ExecutionEngine();
+    tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'act-runner-test-'));
     jest.clearAllMocks();
+    (vscode.workspace.getConfiguration as jest.Mock).mockReturnValue({
+      get: jest.fn((_key: string, defaultValue: unknown) => defaultValue),
+      update: jest.fn().mockResolvedValue(undefined),
+    });
 
-    (workflowParser.parse as jest.Mock).mockResolvedValue({
+    (workflowParser.parse as jest.Mock).mockReturnValue({
       name: 'CI',
       on: { push: {} },
       jobs: { build: { runsOn: 'ubuntu-latest', steps: [] } },
@@ -30,19 +38,20 @@ describe('ExecutionEngine', () => {
 
     (workflowValidator.validate as jest.Mock).mockReturnValue({ valid: true, errors: [] });
 
-    // Simular processo act que finaliza imediatamente
-    const mockProc = new EventEmitter() as any;
-    mockProc.stdout = new EventEmitter();
-    mockProc.stderr = new EventEmitter();
-    mockProc.kill = jest.fn();
-    setImmediate(() => mockProc.emit('close', 0));
-    (actRunner.run as jest.Mock).mockReturnValue(mockProc);
+    (actRunner.isActInstalled as jest.Mock).mockResolvedValue(true);
+    (actRunner.run as jest.Mock).mockResolvedValue(undefined);
+    (actRunner.getLogs as jest.Mock).mockReturnValue([]);
 
     (historyService.save as jest.Mock).mockResolvedValue(undefined);
+    (historyService.getAll as jest.Mock).mockReturnValue([]);
+  });
+
+  afterEach(() => {
+    fs.rmSync(tempRoot, { recursive: true, force: true });
   });
 
   it('run() deve emitir execution:start', async () => {
-    await engine.run({ workflowFile: '.github/workflows/ci.yml', actPath: 'act' });
+    await engine.run({ workflowPath: '.github/workflows/ci.yml', workspaceRoot: tempRoot });
     expect(eventBus.dispatch).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'execution:start' })
     );
@@ -55,12 +64,62 @@ describe('ExecutionEngine', () => {
     });
 
     await expect(
-      engine.run({ workflowFile: '.github/workflows/ci.yml', actPath: 'act' })
+      engine.run({ workflowPath: '.github/workflows/ci.yml', workspaceRoot: tempRoot })
     ).rejects.toThrow(/runs-on/i);
   });
 
   it('isRunning() deve ser false após execução completar', async () => {
-    await engine.run({ workflowFile: '.github/workflows/ci.yml', actPath: 'act' });
+    await engine.run({ workflowPath: '.github/workflows/ci.yml', workspaceRoot: tempRoot });
     expect(engine.isRunning()).toBe(false);
+  });
+
+  it('usa .env como envFile e fallback de varFile quando .vars não existe', async () => {
+    const envPath = path.join(tempRoot, '.env');
+    fs.writeFileSync(envPath, 'RUNNER=ubuntu-latest\nDEFAULT_RUNNER=ubuntu-latest\n');
+
+    await engine.run({ workflowPath: '.github/workflows/ci.yml', workspaceRoot: tempRoot });
+
+    expect(actRunner.run).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        envFile: envPath,
+        varFile: envPath,
+      })
+    );
+  });
+
+  it('prefere .vars como varFile quando .env e .vars existem', async () => {
+    const envPath = path.join(tempRoot, '.env');
+    const varsPath = path.join(tempRoot, '.vars');
+    fs.writeFileSync(envPath, 'RUNNER=ubuntu-latest\n');
+    fs.writeFileSync(varsPath, 'RUNNER=ubuntu-latest\n');
+
+    await engine.run({ workflowPath: '.github/workflows/ci.yml', workspaceRoot: tempRoot });
+
+    expect(actRunner.run).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        envFile: envPath,
+        varFile: varsPath,
+      })
+    );
+  });
+
+  it('usa arquivo customizado configurado como varFile', async () => {
+    (vscode.workspace.getConfiguration as jest.Mock).mockReturnValue({
+      get: jest.fn((key: string, defaultValue: unknown) => key === 'varFile' ? 'my.variables' : defaultValue),
+      update: jest.fn().mockResolvedValue(undefined),
+    });
+    const customVarsPath = path.join(tempRoot, 'my.variables');
+    fs.writeFileSync(customVarsPath, 'RUNNER=ubuntu-latest\n');
+
+    await engine.run({ workflowPath: '.github/workflows/ci.yml', workspaceRoot: tempRoot });
+
+    expect(actRunner.run).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        varFile: customVarsPath,
+      })
+    );
   });
 });

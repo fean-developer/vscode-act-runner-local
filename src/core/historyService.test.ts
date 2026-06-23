@@ -14,12 +14,16 @@ describe('HistoryService', () => {
   const sample: ExecutionRecord = {
     id: 'exec-001',
     workflowName: 'CI Node.js',
-    workflowFile: '.github/workflows/ci.yml',
+    workflowPath: '.github/workflows/ci.yml',
     status: 'success',
     startedAt: new Date('2024-01-01T10:00:00Z').toISOString(),
     completedAt: new Date('2024-01-01T10:01:00Z').toISOString(),
     duration: 60000,
     trigger: 'manual',
+    dryRun: false,
+    actArgs: [],
+    jobs: [],
+    logSummary: '',
   };
 
   beforeEach(() => {

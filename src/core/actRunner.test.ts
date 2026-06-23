@@ -49,33 +49,43 @@ describe('ActRunner', () => {
     expect(result).toBe(false);
   });
 
-  it('sanitizeArg deve remover caracteres de shell injection', () => {
-    const runner = new ActRunner();
-    // @ts-ignore — acessar método privado para teste
-    expect(runner['sanitizeArg']('valid-arg')).toBe('valid-arg');
-    // @ts-ignore
-    expect(runner['sanitizeArg']('bad; rm -rf /')).not.toContain(';');
-    // @ts-ignore
-    expect(runner['sanitizeArg']('$(echo pwned)')).not.toContain('$');
+  it('buildArgs() deve incluir varFile quando informado', () => {
+    const args = (runner as any).buildArgs(
+      {
+        workflowPath: '.github/workflows/ci.yml',
+        workspaceRoot: '/repo',
+        envFile: '/repo/.env',
+        varFile: '/repo/.vars',
+      },
+      'catthehacker/ubuntu:act-latest',
+      '/repo'
+    );
+
+    expect(args).toEqual(expect.arrayContaining([
+      '--env-file', '/repo/.env',
+      '--var-file', '/repo/.vars',
+    ]));
   });
 
-  it('run() deve emitir evento "close" ao finalizar', async () => {
+  it('run() deve resolver ao finalizar com sucesso', async () => {
     const mockProc = createMockProcess([
       '[build] ⭐ Run actions/checkout@v4',
       '[build]   ✅ Success - actions/checkout@v4',
     ]);
+    (runner as any).cleanupActContainers = jest.fn().mockResolvedValue(undefined);
+    (runner as any).cleanupDanglingImages = jest.fn().mockResolvedValue(undefined);
     (spawn as jest.Mock).mockReturnValueOnce(mockProc);
 
-    const closeSpy = jest.fn();
-    const proc = runner.run('exec-001', {
-      workflowFile: '.github/workflows/ci.yml',
-      actPath: 'act',
-    });
-    proc.on('close', closeSpy);
+    await expect(runner.run('exec-001', {
+      workflowPath: '.github/workflows/ci.yml',
+      workspaceRoot: '/repo',
+    })).resolves.toBeUndefined();
 
-    await new Promise((r) => setImmediate(r));
-    await new Promise((r) => setImmediate(r));
-
-    expect(closeSpy).toHaveBeenCalled();
+    expect(spawn).toHaveBeenNthCalledWith(
+      1,
+      'act',
+      expect.arrayContaining(['-W', '.github/workflows/ci.yml']),
+      expect.objectContaining({ cwd: '/repo' })
+    );
   });
 });

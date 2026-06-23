@@ -91,7 +91,7 @@ export type WebviewCommand =
   | { type: 'command:rerun';     payload: { executionId: string } }
   | { type: 'command:selectProject'; payload: Record<string, never> }
   | { type: 'command:locateAct'; payload: Record<string, never> }
-  | { type: 'command:loadEnv';      payload: { tab: string } }
-  | { type: 'command:saveEnv';      payload: { tab: string; rows: { key: string; value: string }[] } }
+  | { type: 'command:loadEnv';      payload: { tab: string; filePath?: string } }
+  | { type: 'command:saveEnv';      payload: { tab: string; rows: { key: string; value: string }[]; filePath?: string } }
   | { type: 'command:deleteHistory'; payload: { executionId: string } }
   | { type: 'state:request';        payload: Record<string, never> };

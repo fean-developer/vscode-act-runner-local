@@ -7,6 +7,7 @@ import { eventBus } from './eventBus';
 import { workflowParser } from './workflowParser';
 import { workflowValidator } from './workflowValidator';
 import { historyService } from './historyService';
+import { envManager } from './envManager';
 import type { ExecutionOptions, ExecutionRecord, ExecutionStatus } from '../types/execution.types';
 
 export class ExecutionEngine {
@@ -154,7 +155,14 @@ export class ExecutionEngine {
     let finalStatus: ExecutionStatus = 'failed';
 
     try {
-      await actRunner.run(executionId, { ...options, actCwd, workspaceRoot, workflowName: workflow.name });
+      await actRunner.run(executionId, {
+        ...options,
+        actCwd,
+        workspaceRoot,
+        workflowName: workflow.name,
+        envFile: options.envFile ?? findConfiguredOrExistingFile(workspaceRoot, envManager.getEnvFilePath(workspaceRoot), ['.env']),
+        varFile: options.varFile ?? findConfiguredOrExistingFile(workspaceRoot, envManager.getVarFilePath(workspaceRoot), ['.vars', '.env']),
+      });
       finalStatus = 'success';
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -250,6 +258,19 @@ export class ExecutionEngine {
   getActiveExecutionId(): string | null {
     return this.activeExecutionId;
   }
+}
+
+function findConfiguredOrExistingFile(root: string, configuredFilePath: string, fallbackCandidates: string[]): string | undefined {
+  if (fs.existsSync(configuredFilePath)) return configuredFilePath;
+  return findExistingFile(root, fallbackCandidates);
+}
+
+function findExistingFile(root: string, candidates: string[]): string | undefined {
+  for (const candidate of candidates) {
+    const filePath = path.join(root, candidate);
+    if (fs.existsSync(filePath)) return filePath;
+  }
+  return undefined;
 }
 
 export const executionEngine = new ExecutionEngine();

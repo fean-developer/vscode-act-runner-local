@@ -71,6 +71,10 @@ export class WorkflowValidator {
     // Validar referências de needs
     const jobIds = new Set(Object.keys(workflow.jobs));
     Object.values(workflow.jobs).forEach((job) => {
+      if (!job.uses && !job['runs-on']) {
+        errors.push(`Job "${job.id}" precisa declarar runs-on`);
+      }
+
       (job.needs ?? []).forEach((dep) => {
         if (!jobIds.has(dep)) {
           errors.push(`Job "${job.id}" referencia needs "${dep}" que não existe`);

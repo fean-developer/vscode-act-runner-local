@@ -54,6 +54,6 @@ describe('WorkflowValidator', () => {
     };
     const result = workflowValidator.validate(modified as any);
     expect(result.valid).toBe(false);
-    expect(result.errors.some((e) => /ciclo|cycle/i.test(e))).toBe(true);
+    expect(result.errors.some((e) => /circular|ciclo|cycle/i.test(e))).toBe(true);
   });
 });

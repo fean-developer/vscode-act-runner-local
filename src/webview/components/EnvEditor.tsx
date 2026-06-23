@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
-type Tab = 'env' | 'secrets' | 'actrc';
+type Tab = 'env' | 'vars' | 'secrets' | 'actrc';
 
 interface EnvEntry { key: string; value: string }
 
@@ -35,6 +35,11 @@ export function EnvEditor() {
   const save = () =>
     window.__vscode__?.postMessage({ type: 'command:saveEnv', payload: { tab, rows, filePath } });
 
+  const loadCurrentFile = () => {
+    setLoading(true);
+    window.__vscode__?.postMessage({ type: 'command:loadEnv', payload: { tab, filePath } });
+  };
+
   const addRow = () => setRows((r) => [...r, { key: '', value: '' }]);
 
   const updateRow = (i: number, field: keyof EnvEntry, val: string) =>
@@ -43,11 +48,12 @@ export function EnvEditor() {
   const removeRow = (i: number) => setRows((r) => r.filter((_, idx) => idx !== i));
 
   const isSecret = tab === 'secrets';
+  const canEditFilePath = tab === 'vars';
 
   return (
     <div style={styles.container}>
       <div style={styles.tabs}>
-        {(['env', 'secrets', 'actrc'] as Tab[]).map((t) => (
+        {(['env', 'vars', 'secrets', 'actrc'] as Tab[]).map((t) => (
           <button key={t} style={{ ...styles.tab, ...(tab === t ? styles.tabActive : {}) }} onClick={() => setTab(t)}>
             {TAB_LABELS[t]}
           </button>
@@ -63,7 +69,20 @@ export function EnvEditor() {
         </div>
       )}
 
-      {filePath && (
+      {canEditFilePath ? (
+        <label style={styles.filePathEditor}>
+          <span style={styles.filePathLabel}>Arquivo de vars</span>
+          <span style={styles.filePathRow}>
+            <input
+              style={styles.filePathInput}
+              value={filePath}
+              placeholder=".vars ou my.variables"
+              onChange={(e) => setFilePath(e.target.value)}
+            />
+            <button style={styles.btnSecondary} onClick={loadCurrentFile}>Carregar</button>
+          </span>
+        </label>
+      ) : filePath && (
         <div style={styles.filePathHint}>
           📄 {filePath}
         </div>
@@ -104,7 +123,7 @@ export function EnvEditor() {
   );
 }
 
-const TAB_LABELS: Record<Tab, string> = { env: '.env', secrets: '.secrets', actrc: '.actrc' };
+const TAB_LABELS: Record<Tab, string> = { env: '.env', vars: '.vars', secrets: '.secrets', actrc: '.actrc' };
 
 const styles: Record<string, React.CSSProperties> = {
   container: { flex: 1, overflow: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 12 },
@@ -115,6 +134,10 @@ const styles: Record<string, React.CSSProperties> = {
   toggleBtn: { marginLeft: 'auto', padding: '2px 6px', border: '1px solid #484f58', borderRadius: 3, background: 'transparent', color: '#c9d1d9', cursor: 'pointer', fontSize: 11 },
   loadingMsg: { color: '#6e7681', fontSize: 12, padding: '16px 4px' },
   filePathHint: { fontSize: 10, color: '#484f58', fontFamily: 'monospace', padding: '2px 4px' },
+  filePathEditor: { display: 'flex', flexDirection: 'column', gap: 4 },
+  filePathRow: { display: 'flex', gap: 8 },
+  filePathLabel: { fontSize: 11, color: '#8b949e' },
+  filePathInput: { flex: 1, padding: '6px 8px', background: '#0d1117', border: '1px solid #30363d', borderRadius: 4, color: '#c9d1d9', fontSize: 12, fontFamily: 'monospace', outline: 'none' },
   table: { border: '1px solid #21262d', borderRadius: 4, overflow: 'hidden' },
   tableHead: { display: 'flex', background: '#0d1117', padding: '4px 8px', fontSize: 11, color: '#6e7681' },
   tableRow: { display: 'flex', borderTop: '1px solid #21262d' },

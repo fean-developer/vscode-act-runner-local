@@ -36,17 +36,37 @@ export class EnvManager {
   }
 
   getEnvFilePath(workspaceRoot: string): string {
-    return path.join(workspaceRoot, '.env');
+    const config = vscode.workspace.getConfiguration('actRunner');
+    const envFile = config.get<string>('envFile') ?? '.env';
+    return this.resolveWorkspacePath(workspaceRoot, envFile);
+  }
+
+  getVarFilePath(workspaceRoot: string): string {
+    const config = vscode.workspace.getConfiguration('actRunner');
+    const varFile = config.get<string>('varFile') ?? '.vars';
+    return this.resolveWorkspacePath(workspaceRoot, varFile);
   }
 
   getSecretsFilePath(workspaceRoot: string): string {
     const config = vscode.workspace.getConfiguration('actRunner');
     const secretsFile = config.get<string>('secretsFile') ?? '.secrets';
-    return path.join(workspaceRoot, secretsFile);
+    return this.resolveWorkspacePath(workspaceRoot, secretsFile);
   }
 
   getActrcFilePath(workspaceRoot: string): string {
     return path.join(workspaceRoot, '.actrc');
+  }
+
+  toWorkspaceRelative(workspaceRoot: string, filePath: string): string {
+    const resolved = this.resolveWorkspacePath(workspaceRoot, filePath);
+    const relative = path.relative(workspaceRoot, resolved);
+    return relative && !relative.startsWith('..') && !path.isAbsolute(relative)
+      ? relative
+      : resolved;
+  }
+
+  private resolveWorkspacePath(workspaceRoot: string, filePath: string): string {
+    return path.isAbsolute(filePath) ? filePath : path.join(workspaceRoot, filePath);
   }
 
   async ensureSecretsIgnored(workspaceRoot: string): Promise<void> {
