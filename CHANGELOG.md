@@ -1,5 +1,26 @@
 # Changelog
 
+## v2.10.1
+
+### Adicionado
+
+- Adicionada aba **.vars** na tela **Variáveis** para gerenciar variáveis do contexto `${{ vars.* }}` do GitHub Actions.
+- Adicionado suporte a arquivo de vars customizado, compatível com `act --var-file my.variables`.
+- Adicionada configuração `actRunner.varFile` para persistir o arquivo de vars usado nas execuções locais.
+- Adicionado botão **Carregar** na aba `.vars` para ler arquivos como `.vars`, `my.variables` ou outro caminho informado pelo usuário.
+- Adicionados testes de regressão para garantir que `.env`, `.vars` e arquivos customizados sejam enviados corretamente ao `act`.
+
+### Alterado
+
+- A execução agora usa o arquivo configurado em `actRunner.varFile` como `--var-file` quando ele existe.
+- A tela **Variáveis** agora diferencia variáveis de ambiente (`.env`) das variáveis do contexto `vars` (`.vars`).
+- O arquivo `.env` continua sendo usado como fallback para `--var-file` quando `.vars` ou o arquivo configurado não existem.
+
+### Corrigido
+
+- Corrigido o caso em que workflows com `runs-on: ${{ vars.RUNNER || vars.DEFAULT_RUNNER }}` não reconheciam valores definidos localmente.
+- Corrigida a ausência de variáveis do arquivo `.vars` na interface de gerenciamento de variáveis.
+
 ## v2.10.0
 
 ### Adicionado
