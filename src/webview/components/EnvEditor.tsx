@@ -37,6 +37,11 @@ export function EnvEditor() {
     window.__vscode__?.postMessage({ type: 'command:loadEnv', payload: { tab, filePath } });
   };
 
+  const selectFile = () => {
+    setLoading(true);
+    window.__vscode__?.postMessage({ type: 'command:selectEnvFile', payload: { tab } });
+  };
+
   const addRow = () => setRows((r) => [...r, { key: '', value: '' }]);
 
   const updateRow = (i: number, field: keyof EnvEntry, val: string) =>
@@ -76,6 +81,7 @@ export function EnvEditor() {
               placeholder={FILE_PLACEHOLDERS[tab]}
               onChange={(e) => setFilePath(e.target.value)}
             />
+            <button style={styles.btnSecondary} onClick={selectFile}>Selecionar</button>
             <button style={styles.btnSecondary} onClick={loadCurrentFile}>Carregar</button>
           </span>
         </label>

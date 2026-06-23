@@ -9,6 +9,7 @@ export interface EnvEntry {
 }
 
 type FileConfigKey = 'envFile' | 'varFile' | 'secretsFile';
+export type EnvFileConfigKey = FileConfigKey;
 
 export class EnvManager {
   private context?: vscode.ExtensionContext;
@@ -49,12 +50,24 @@ export class EnvManager {
     return this.getConfiguredFilePath(workspaceRoot, 'envFile', '.env');
   }
 
+  getSelectedEnvFilePath(workspaceRoot: string): string | undefined {
+    return this.getSelectedFilePath(workspaceRoot, 'envFile');
+  }
+
   getVarFilePath(workspaceRoot: string): string {
     return this.getConfiguredFilePath(workspaceRoot, 'varFile', '.vars');
   }
 
+  getSelectedVarFilePath(workspaceRoot: string): string | undefined {
+    return this.getSelectedFilePath(workspaceRoot, 'varFile');
+  }
+
   getSecretsFilePath(workspaceRoot: string): string {
     return this.getConfiguredFilePath(workspaceRoot, 'secretsFile', '.secrets');
+  }
+
+  getSelectedSecretsFilePath(workspaceRoot: string): string | undefined {
+    return this.getSelectedFilePath(workspaceRoot, 'secretsFile');
   }
 
   getActrcFilePath(workspaceRoot: string): string {
@@ -85,6 +98,25 @@ export class EnvManager {
       // Sessions started before the setting is registered can reject this update.
       // The in-memory override and workspaceState keep the selection functional.
     }
+  }
+
+  resolveFilePath(workspaceRoot: string, filePath: string): string {
+    return this.resolveWorkspacePath(workspaceRoot, filePath);
+  }
+
+  getDefaultFilePath(workspaceRoot: string, key: FileConfigKey): string {
+    const defaults: Record<FileConfigKey, string> = {
+      envFile: '.env',
+      varFile: '.vars',
+      secretsFile: '.secrets',
+    };
+    return this.resolveWorkspacePath(workspaceRoot, defaults[key]);
+  }
+
+  private getSelectedFilePath(workspaceRoot: string, key: FileConfigKey): string | undefined {
+    const override = this.fileOverrides.get(workspaceRoot)?.[key];
+    const stored = this.context?.workspaceState.get<string>(this.workspaceStateKey(workspaceRoot, key));
+    return override ?? stored ? this.resolveWorkspacePath(workspaceRoot, override ?? stored!) : undefined;
   }
 
   private getConfiguredFilePath(workspaceRoot: string, key: FileConfigKey, defaultFile: string): string {

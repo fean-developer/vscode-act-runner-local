@@ -482,22 +482,42 @@ function openWebviewPanel(context: vscode.ExtensionContext, initialView: string,
                 .map((l: string) => ({ key: l, value: '' }));
             }
           } else {
-            const filePath = tab === 'env'
-              ? (clientFilePath?.trim() ? path.resolve(root, clientFilePath.trim()) : envManager.getEnvFilePath(root))
-              : tab === 'vars'
-                ? (clientFilePath?.trim() ? path.resolve(root, clientFilePath.trim()) : envManager.getVarFilePath(root))
-                : clientFilePath?.trim() ? path.resolve(root, clientFilePath.trim()) : envManager.getSecretsFilePath(root);
-            if (clientFilePath?.trim()) {
+            const filePath = resolveEnvEditorFilePath(root, tab, clientFilePath);
+            if (clientFilePath?.trim() && filePath) {
               await rememberEnvFilePath(root, tab, filePath);
             }
-            foundFilePath = filePath;
-            const map = envManager.read(filePath);
-            rows = Array.from(map.entries()).map(([key, value]) => ({ key, value }));
+            if (filePath && require('fs').existsSync(filePath)) {
+              foundFilePath = filePath;
+              const map = envManager.read(filePath);
+              rows = mapToEnvRows(map);
+            }
           }
         } catch { /* arquivo não existe — rows permanece vazio */ }
         webviewPanel?.webview.postMessage({
           type: 'state:snapshot',
           payload: { envData: { tab, rows, filePath: foundFilePath } },
+        });
+        break;
+      }
+      case 'command:selectEnvFile': {
+        const { tab } = msg.payload as { tab: string };
+        const root = workspaceRoot();
+        const selected = await vscode.window.showOpenDialog({
+          canSelectFiles: true,
+          canSelectFolders: false,
+          canSelectMany: false,
+          defaultUri: vscode.Uri.file(root),
+          openLabel: 'Selecionar arquivo',
+          title: `Selecionar arquivo de ${tab}`,
+          filters: { 'Arquivos de variáveis': ['env', 'vars', 'variables', 'secrets', '*'] },
+        });
+        const filePath = selected?.[0]?.fsPath;
+        if (!filePath) break;
+        await rememberEnvFilePath(root, tab, filePath);
+        const map = envManager.read(filePath);
+        webviewPanel?.webview.postMessage({
+          type: 'state:snapshot',
+          payload: { envData: { tab, rows: mapToEnvRows(map), filePath } },
         });
         break;
       }
@@ -518,18 +538,18 @@ function openWebviewPanel(context: vscode.ExtensionContext, initialView: string,
             require('fs').writeFileSync(filePath, content + '\n', 'utf-8');
           } else {
             const requestedFilePath = clientFilePath?.trim();
-            const filePath = tab === 'env'
-              ? (requestedFilePath ? path.resolve(root, requestedFilePath) : envManager.getEnvFilePath(root))
-              : tab === 'vars'
-                ? (requestedFilePath ? path.resolve(root, requestedFilePath) : envManager.getVarFilePath(root))
-                : requestedFilePath ? path.resolve(root, requestedFilePath) : envManager.getSecretsFilePath(root);
+            const filePath = requestedFilePath
+              ? envManager.resolveFilePath(root, requestedFilePath)
+              : resolveEnvEditorFilePath(root, tab);
+            if (!filePath) {
+              vscode.window.showErrorMessage(`Selecione um arquivo para salvar ${tab === 'vars' ? 'vars' : `.${tab}`}.`);
+              break;
+            }
             const map = new Map(
               rows.filter((r) => r.key.trim()).map((r) => [r.key.trim(), r.value])
             );
             envManager.write(filePath, map);
-            if (requestedFilePath) {
-              await rememberEnvFilePath(root, tab, filePath);
-            }
+            await rememberEnvFilePath(root, tab, filePath);
           }
           vscode.window.showInformationMessage(`✅ ${tab === 'vars' ? 'vars' : `.${tab}`} salvo com sucesso.`);
         } catch (e) {
@@ -601,6 +621,34 @@ async function rememberEnvFilePath(root: string, tab: string, filePath: string):
   if (tab === 'env') await envManager.rememberFilePath(root, 'envFile', filePath);
   if (tab === 'vars') await envManager.rememberFilePath(root, 'varFile', filePath);
   if (tab === 'secrets') await envManager.rememberFilePath(root, 'secretsFile', filePath);
+}
+
+function mapToEnvRows(map: Map<string, string>): { key: string; value: string }[] {
+  return Array.from(map.entries()).map(([key, value]) => ({ key, value }));
+}
+
+function resolveEnvEditorFilePath(root: string, tab: string, clientFilePath?: string): string | undefined {
+  const fsNode = require('fs') as typeof import('fs');
+  if (clientFilePath?.trim()) return envManager.resolveFilePath(root, clientFilePath.trim());
+
+  const selectedPath = tab === 'env'
+    ? envManager.getSelectedEnvFilePath(root)
+    : tab === 'vars'
+      ? envManager.getSelectedVarFilePath(root)
+      : tab === 'secrets'
+        ? envManager.getSelectedSecretsFilePath(root)
+        : undefined;
+  if (selectedPath) return selectedPath;
+
+  const defaultPath = tab === 'env'
+    ? envManager.getDefaultFilePath(root, 'envFile')
+    : tab === 'vars'
+      ? envManager.getDefaultFilePath(root, 'varFile')
+      : tab === 'secrets'
+        ? envManager.getDefaultFilePath(root, 'secretsFile')
+        : undefined;
+
+  return defaultPath && fsNode.existsSync(defaultPath) ? defaultPath : undefined;
 }
 
 function createWorkflowDispatchPayload(inputs: Record<string, string | number | boolean>): string {

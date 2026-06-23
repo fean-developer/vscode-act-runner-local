@@ -5,6 +5,7 @@ const vscode = {
     showWarningMessage: jest.fn(),
     showErrorMessage: jest.fn(),
     showQuickPick: jest.fn(),
+    showOpenDialog: jest.fn(),
     createStatusBarItem: jest.fn(() => ({
       show: jest.fn(),
       hide: jest.fn(),

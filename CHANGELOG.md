@@ -1,5 +1,18 @@
 # Changelog
 
+## v2.10.3
+
+### Adicionado
+
+- Adicionada seleção via diálogo de arquivo para `.env`, `.vars` e `.secrets`.
+- Adicionada persistência do caminho escolhido por projeto ao reabrir a tela **Variáveis**.
+- Adicionados testes para garantir que arquivos selecionados sejam recuperados corretamente após troca ou reabertura da tela.
+
+### Alterado
+
+- A tela **Variáveis** agora deixa o campo de arquivo vazio quando nenhum arquivo existente ou selecionado foi encontrado.
+- O salvamento de `.env`, `.vars` e `.secrets` agora exige um arquivo selecionado quando nenhum caminho válido foi encontrado.
+
 ## v2.10.2
 
 ### Adicionado
