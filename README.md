@@ -125,8 +125,4 @@ Crie na raiz do projeto:
 
 Veja o arquivo [USER GUIDE](USER_GUIDE.md) incluído na extensão para instruções detalhadas de uso.
 
-## Buy me a Coffe
-<img src="images/bmc_qr.png" width=100 img/><br />
-## Licença
-
 MIT
