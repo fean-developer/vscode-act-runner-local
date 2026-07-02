@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useExecutionStore, type WorkflowListItem } from '../store/executionStore';
 
 export function WorkflowLauncherSidebar() {
   const { workflows, selectedWorkflowPath, repository, setSelectedWorkflowPath, openWorkflowRunDialog } = useExecutionStore();
+  const [isOpen, setIsOpen] = useState(true);
 
   const selectRepository = () => {
     window.__vscode__?.postMessage({ type: 'command:selectProject', payload: {} });
@@ -18,8 +19,31 @@ export function WorkflowLauncherSidebar() {
     window.__vscode__?.postMessage({ type: 'command:run', payload: { workflowPath: workflow.filePath } });
   };
 
+  if (!isOpen) {
+    return (
+      <aside style={styles.sidebarCollapsed}>
+        <button
+          type="button"
+          style={styles.toggleCollapsedBtn}
+          onClick={() => setIsOpen(true)}
+          title="Abrir sidebar de workflows"
+        >
+          ▸
+        </button>
+      </aside>
+    );
+  }
+
   return (
     <aside style={styles.sidebar}>
+      <button
+        type="button"
+        style={styles.toggleOpenBtn}
+        onClick={() => setIsOpen(false)}
+        title="Fechar sidebar de workflows"
+      >
+        ◂
+      </button>
       <div style={styles.repoBox}>
         <div style={styles.repoLabel}>Repositório</div>
         <button type="button" style={styles.repoButton} onClick={selectRepository} title={repository?.root ?? 'Selecionar repositório'}>
@@ -66,6 +90,7 @@ export function WorkflowLauncherSidebar() {
 
 const styles: Record<string, React.CSSProperties> = {
   sidebar: {
+    position: 'relative',
     width: 240,
     flexShrink: 0,
     borderRight: '1px solid #21262d',
@@ -73,6 +98,43 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     flexDirection: 'column',
     overflow: 'hidden',
+  },
+  sidebarCollapsed: {
+    width: 28,
+    flexShrink: 0,
+    borderRight: '1px solid #21262d',
+    background: '#0d1117',
+    display: 'flex',
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+    paddingTop: 6,
+  },
+  toggleCollapsedBtn: {
+    width: 18,
+    height: 24,
+    border: '1px solid #30363d',
+    borderRadius: 4,
+    background: '#161b22',
+    color: '#8b949e',
+    cursor: 'pointer',
+    fontSize: 11,
+    lineHeight: 1,
+    padding: 0,
+  },
+  toggleOpenBtn: {
+    position: 'absolute',
+    top: 8,
+    right: 6,
+    width: 18,
+    height: 18,
+    border: '1px solid #30363d',
+    borderRadius: 4,
+    background: '#161b22',
+    color: '#8b949e',
+    cursor: 'pointer',
+    fontSize: 10,
+    lineHeight: 1,
+    padding: 0,
   },
   repoBox: {
     padding: 10,

@@ -39,7 +39,7 @@ export interface LogPayload {
   jobId?: string;
   stepId?: string;
   line: string;
-  level: 'info' | 'warn' | 'error' | 'debug';
+  level: 'info' | 'warn' | 'error' | 'debug' | 'notice';
   timestamp: string;
 }
 

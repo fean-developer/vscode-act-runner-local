@@ -129,8 +129,7 @@ export function ExecutionSidebar() {
   const [expandedOuter, setExpandedOuter] = useState<Set<string>>(new Set());
   const [expandedInner, setExpandedInner] = useState<Set<string>>(new Set());
 
-  // Refs para controlar auto-expand sem sobrescrever colapso manual
-  const autoExpandedRef = useRef<Set<string>>(new Set());
+  // Ref para detectar início de nova execução
   const prevExecIdRef   = useRef<string | null>(null);
 
   // Nodes por tipo/nível
@@ -163,26 +162,10 @@ export function ExecutionSidebar() {
   useEffect(() => {
     if (execution.executionId !== prevExecIdRef.current) {
       prevExecIdRef.current = execution.executionId;
-      autoExpandedRef.current.clear();
       setExpandedOuter(new Set());
       setExpandedInner(new Set());
     }
   }, [execution.executionId]);
-
-  // Auto-expandir APENAS na primeira vez que um job entra em 'running'
-  useEffect(() => {
-    const toOuter: string[] = [];
-    const toInner: string[] = [];
-    [...outerJobs, ...innerJobs].forEach(j => {
-      if (j.status === 'running' && !autoExpandedRef.current.has(j.id)) {
-        autoExpandedRef.current.add(j.id);
-        (j.parentId ? toInner : toOuter).push(j.id);
-      }
-    });
-    if (toOuter.length) setExpandedOuter(prev => { const n = new Set(prev); toOuter.forEach(id => n.add(id)); return n; });
-    if (toInner.length) setExpandedInner(prev => { const n = new Set(prev); toInner.forEach(id => n.add(id)); return n; });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nodes]);
 
   if (outerJobs.length === 0 || execution.status === 'idle') return null;
 

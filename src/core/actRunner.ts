@@ -6,6 +6,8 @@ import * as vscode from 'vscode';
 import { eventBus } from './eventBus';
 import type { ExecutionOptions } from '../types/execution.types';
 
+type LogLevel = 'info' | 'warn' | 'error' | 'debug' | 'notice';
+
 // Caminhos candidatos para o binário do act em ordem de prioridade
 const ACT_CANDIDATE_PATHS: string[] = [
   path.join(os.homedir(), '.act', 'act'),          // ~/.act/act  (seu caso)
@@ -18,7 +20,11 @@ const ACT_CANDIDATE_PATHS: string[] = [
 ];
 
 const ANSI_RE = /\x1B[\[\]()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><~]/g;
-const strip = (s: string) => s.replace(ANSI_RE, '').replace(/\r/g, '');
+const stripAnsi = (s: string) => s.replace(ANSI_RE, '');
+const stripCarriageReturn = (s: string) => s.replace(/\r/g, '');
+
+const RE_GITHUB_ANNOTATION = /::(notice|warning|error|debug)(?:\s+.*?)?::?\s*(.*)$/i;
+const RE_LEVEL_PREFIX = /^\s*\[(notice|info|warning|warn|error|debug)\]\s*(.*)$/i;
 
 // Output channel visível em "Output > Act Visual Runner"
 let _outputChannel: vscode.OutputChannel | undefined;
@@ -249,12 +255,13 @@ export class ActRunner {
 
       this.activeProcess.stderr?.on('data', (chunk: Buffer) => {
         chunk.toString().split('\n').forEach((line: string) => {
-          const clean = strip(line);
+          const classified = this.classifyLogLine(line, 'error');
+          const clean = stripAnsi(classified.line);
           if (clean.trim()) {
             this.accumulatedLogs.push(clean);
             eventBus.dispatch({
               type: 'log',
-              payload: { executionId, line: clean, level: 'error', timestamp: now() },
+              payload: { executionId, line: classified.line, level: classified.level, timestamp: now() },
             });
           }
         });
@@ -372,17 +379,45 @@ export class ActRunner {
     return line;
   }
 
+  private classifyLogLine(rawLine: string, fallbackLevel: LogLevel = 'info'): { line: string; level: LogLevel } {
+    const line = stripCarriageReturn(rawLine);
+
+    const ghAnnotationRaw = line.match(RE_GITHUB_ANNOTATION);
+    if (ghAnnotationRaw) {
+      const levelToken = ghAnnotationRaw[1].toLowerCase();
+      const message = ghAnnotationRaw[2] ?? '';
+      if (levelToken === 'warning') return { line: message, level: 'warn' };
+      if (levelToken === 'error') return { line: message, level: 'error' };
+      if (levelToken === 'debug') return { line: message, level: 'debug' };
+      return { line: message, level: 'notice' };
+    }
+
+    const levelPrefix = line.match(RE_LEVEL_PREFIX);
+    if (levelPrefix) {
+      const levelToken = levelPrefix[1].toLowerCase();
+      const message = levelPrefix[2] ?? '';
+      if (levelToken === 'warning' || levelToken === 'warn') return { line: message, level: 'warn' };
+      if (levelToken === 'error') return { line: message, level: 'error' };
+      if (levelToken === 'debug') return { line: message, level: 'debug' };
+      if (levelToken === 'notice' || levelToken === 'info') return { line: message, level: 'notice' };
+    }
+
+    return { line, level: fallbackLevel };
+  }
+
   private processLine(executionId: string, raw: string): void {
-    const clean = strip(raw);
+    const clean = stripCarriageReturn(raw);
+    const cleanForParsingOnly = stripAnsi(clean);
     if (!clean.trim()) return;
 
     // Log every line to the output channel for visibility / debugging
-    actLog(clean);
+    actLog(cleanForParsingOnly);
 
     // Remover prefixo do workflow name para parsear brackets corretamente
     // Act v2 prefixa todos os brackets com: [WorkflowDisplayName/JobName]
     // Para workflows com "/" no nome (ex: "CI/CD Pipeline"), isso causaria falsos outer jobs.
-    const cleanForParsing = this.stripWorkflowPrefix(clean);
+    const cleanForParsingNoWorkflowPrefix = this.stripWorkflowPrefix(cleanForParsingOnly);
+    const cleanNoWorkflowPrefix = this.stripWorkflowPrefix(clean);
 
     let m: RegExpMatchArray | null;
 
@@ -390,7 +425,7 @@ export class ActRunner {
     // Any bracketed line tells us which outer job is active.
     // - First appearance  → mark it as "running" (works for ALL act output formats)
     // - Pending resolve   → confirm/cancel pending status based on outer-job change
-    const bracketM = cleanForParsing.match(RE_ANY_BRACKET);
+    const bracketM = cleanForParsingNoWorkflowPrefix.match(RE_ANY_BRACKET);
     if (bracketM) {
       const { outerJobId: currentOuterJobId, effectiveJobId: currentEffectiveJobId, isReusable } = parseEffectiveBracket(bracketM[1]);
 
@@ -440,7 +475,7 @@ export class ActRunner {
     }
     // ───────────────────────────────────────────────────────────────────────
 
-    if ((m = cleanForParsing.match(RE_STEP_START))) {
+    if ((m = cleanForParsingNoWorkflowPrefix.match(RE_STEP_START))) {
       const { outerJobId, effectiveJobId, isReusable } = parseEffectiveBracket(m[1]);
       const stepName = m[2].trim();
       this.currentStep.set(effectiveJobId, stepName);
@@ -448,34 +483,34 @@ export class ActRunner {
       eventBus.dispatch({ type: 'step:update', payload: { executionId, jobId: effectiveJobId, stepId: stepName, stepName, status: 'running', startedAt: now() } });
       return;
     }
-    if ((m = cleanForParsing.match(RE_STEP_OK))) {
+    if ((m = cleanForParsingNoWorkflowPrefix.match(RE_STEP_OK))) {
       const { effectiveJobId } = parseEffectiveBracket(m[1]);
       const stepName = stripTiming(m[2].trim()); // remove sufixo de timing: "Name [52ms]" → "Name"
       this.currentStep.delete(effectiveJobId);
       eventBus.dispatch({ type: 'step:update', payload: { executionId, jobId: effectiveJobId, stepId: stepName, stepName, status: 'success', completedAt: now() } });
       return;
     }
-    if ((m = cleanForParsing.match(RE_STEP_FAIL))) {
+    if ((m = cleanForParsingNoWorkflowPrefix.match(RE_STEP_FAIL))) {
       const { effectiveJobId } = parseEffectiveBracket(m[1]);
       const stepName = stripTiming(m[2].trim());
       this.currentStep.delete(effectiveJobId);
       eventBus.dispatch({ type: 'step:update', payload: { executionId, jobId: effectiveJobId, stepId: stepName, stepName, status: 'failed', completedAt: now() } });
       return;
     }
-    if ((m = cleanForParsing.match(RE_STEP_SKIP))) {
+    if ((m = cleanForParsingNoWorkflowPrefix.match(RE_STEP_SKIP))) {
       const { effectiveJobId } = parseEffectiveBracket(m[1]);
       const stepName = stripTiming(m[2].trim());
       this.currentStep.delete(effectiveJobId);
       eventBus.dispatch({ type: 'step:update', payload: { executionId, jobId: effectiveJobId, stepId: stepName, stepName, status: 'skipped', completedAt: now() } });
       return;
     }
-    if ((m = cleanForParsing.match(RE_JOB_START))) {
+    if ((m = cleanForParsingNoWorkflowPrefix.match(RE_JOB_START))) {
       const { outerJobId, effectiveJobId, isReusable } = parseEffectiveBracket(m[1]);
       actLog(`[act-runner] job:running → jobId="${effectiveJobId}"`);
       eventBus.dispatch({ type: 'job:update', payload: { executionId, jobId: effectiveJobId, jobName: effectiveJobId, outerJobId: isReusable ? outerJobId : undefined, status: 'running', startedAt: now() } });
       return;
     }
-    if ((m = cleanForParsing.match(RE_JOB_OK))) {
+    if ((m = cleanForParsingNoWorkflowPrefix.match(RE_JOB_OK))) {
       const { outerJobId, effectiveJobId, isReusable } = parseEffectiveBracket(m[1]);
       if (isReusable) {
         actLog(`[act-runner] inner job:success → jobId="${effectiveJobId}"`);
@@ -486,7 +521,7 @@ export class ActRunner {
       }
       return;
     }
-    if ((m = cleanForParsing.match(RE_JOB_FAIL))) {
+    if ((m = cleanForParsingNoWorkflowPrefix.match(RE_JOB_FAIL))) {
       const { outerJobId, effectiveJobId, isReusable } = parseEffectiveBracket(m[1]);
       if (isReusable) {
         actLog(`[act-runner] inner job:failed → jobId="${effectiveJobId}"`);
@@ -498,20 +533,24 @@ export class ActRunner {
       }
       return;
     }
-    if ((m = cleanForParsing.match(RE_LOG_LINE))) {
+    if ((m = cleanForParsingNoWorkflowPrefix.match(RE_LOG_LINE))) {
       // Formato: [bracket] | content
       const { effectiveJobId } = parseEffectiveBracket(m[1]);
       const stepId = this.currentStep.get(effectiveJobId) ?? effectiveJobId;
-      this.accumulatedLogs.push(m[2]);
-      eventBus.dispatch({ type: 'log', payload: { executionId, jobId: effectiveJobId, stepId, line: m[2], level: 'info', timestamp: now() } });
+      const rawLogMatch = cleanNoWorkflowPrefix.match(RE_LOG_LINE);
+      const rawContent = rawLogMatch ? rawLogMatch[2] : m[2];
+      const classified = this.classifyLogLine(rawContent, 'info');
+      this.accumulatedLogs.push(stripAnsi(classified.line));
+      eventBus.dispatch({ type: 'log', payload: { executionId, jobId: effectiveJobId, stepId, line: classified.line, level: classified.level, timestamp: now() } });
       return;
     }
     // ── Detecção de GITHUB_STEP_SUMMARY via output do act ──────────────────
     // Act pode emitir: [bracket] ◎ Summary - <linha> ou [bracket] Summary - <linha>
     // Linhas seguintes sem bracket são continuação do summary.
-    const bracketFallback = cleanForParsing.match(RE_ANY_BRACKET);
+    const bracketFallback = cleanForParsingNoWorkflowPrefix.match(RE_ANY_BRACKET);
     if (bracketFallback) {
-      const lineContent = clean.slice(clean.indexOf(']') + 1).trim();
+      const rawLineContent = cleanNoWorkflowPrefix.slice(cleanNoWorkflowPrefix.indexOf(']') + 1).trim();
+      const lineContent = stripAnsi(rawLineContent);
       // Detectar início de summary, tolerando ícones/símbolos antes de "Summary".
       const summaryMatch = lineContent.match(/^(?:[^A-Za-z0-9#|`*-]+\s*)?Summary\s*-\s*(.*)$/i);
       if (summaryMatch) {
@@ -524,8 +563,9 @@ export class ActRunner {
         // Também enviar como log normal
         const { effectiveJobId } = parseEffectiveBracket(bracketFallback[1]);
         const stepId = this.currentStep.get(effectiveJobId) ?? effectiveJobId;
-        this.accumulatedLogs.push(lineContent);
-        eventBus.dispatch({ type: 'log', payload: { executionId, jobId: effectiveJobId, stepId, line: lineContent, level: 'info', timestamp: now() } });
+        const classified = this.classifyLogLine(rawLineContent, 'info');
+        this.accumulatedLogs.push(stripAnsi(classified.line));
+        eventBus.dispatch({ type: 'log', payload: { executionId, jobId: effectiveJobId, stepId, line: classified.line, level: classified.level, timestamp: now() } });
         return;
       }
       // Qualquer outra linha com bracket encerra a captura de summary
@@ -537,17 +577,19 @@ export class ActRunner {
       const { effectiveJobId } = parseEffectiveBracket(bracketFallback[1]);
       const stepId = this.currentStep.get(effectiveJobId) ?? effectiveJobId;
       if (lineContent) {
-        this.accumulatedLogs.push(lineContent);
-        eventBus.dispatch({ type: 'log', payload: { executionId, jobId: effectiveJobId, stepId, line: lineContent, level: 'info', timestamp: now() } });
+        const classified = this.classifyLogLine(rawLineContent, 'info');
+        this.accumulatedLogs.push(stripAnsi(classified.line));
+        eventBus.dispatch({ type: 'log', payload: { executionId, jobId: effectiveJobId, stepId, line: classified.line, level: classified.level, timestamp: now() } });
       }
       return;
     }
     // Linha sem bracket — pode ser continuação do summary ou stdout bruto
     if (this.inSummaryCapture) {
-      this.summaryLines.push(clean);
+      this.summaryLines.push(cleanForParsingOnly);
     }
-    this.accumulatedLogs.push(clean);
-    eventBus.dispatch({ type: 'log', payload: { executionId, line: clean, level: 'info', timestamp: now() } });
+    const classified = this.classifyLogLine(clean, 'info');
+    this.accumulatedLogs.push(stripAnsi(classified.line));
+    eventBus.dispatch({ type: 'log', payload: { executionId, line: classified.line, level: classified.level, timestamp: now() } });
   }
 
   /** Despacha o summary acumulado para o webview se houver conteúdo */

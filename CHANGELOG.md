@@ -1,5 +1,77 @@
 # Changelog
 
+## v2.10.10
+
+### Adicionado
+
+- Adicionado suporte para renderizar HTML diretamente no painel de logs.
+
+### Segurança
+
+- A renderização HTML no log agora aplica sanitização com allowlist de tags e estilos para bloquear scripts, handlers inline e atributos não permitidos.
+
+### Alterado
+
+- Linhas de log com HTML (ex.: `<div style="color:red">...<br>...</div>`) passam a ser exibidas formatadas, enquanto logs ANSI e texto puro continuam funcionando normalmente.
+
+## v2.10.9
+
+### Adicionado
+
+- Adicionado controle de colapsar/expandir para a sidebar de workflows (lado esquerdo), iniciando aberta por padrão.
+
+### Alterado
+
+- A sidebar de execução agora inicia com jobs/steps colapsados em cada nova execução, sem auto-expansão automática.
+
+## v2.10.8
+
+### Corrigido
+
+- Corrigida a detecção de anotações do GitHub Actions em variações de saída do `act` com separador não estritamente `::` após atributos (ex.: `title=...:mensagem`).
+- Corrigida a falha residual onde linhas com `?::notice ...` podiam permanecer como `info` em vez de `notice`.
+
+## v2.10.7
+
+### Corrigido
+
+- Corrigida a classificação de comandos oficiais do GitHub Actions quando o `act` prefixa a linha com ícones/símbolos (ex.: `❓ ::notice ...`).
+- Corrigida a renderização sem cor para logs textuais com prefixo de nível (`[INFO]`, `[DEBUG]`, `[WARN]`, `[ERROR]`), agora mapeados para níveis visuais da UI.
+
+### Alterado
+
+- O parser de anotação oficial (`::notice::`, `::warning::`, `::error::`, `::debug::`) agora detecta o comando mesmo quando não está no início absoluto da linha.
+
+## v2.10.6
+
+### Alterado
+
+- O parser de nível de log não depende mais de prefixos customizados como `logger::info` ou `[INFO]`.
+- A classificação de nível especial agora fica restrita aos comandos oficiais do GitHub Actions (`::notice::`, `::warning::`, `::error::`, `::debug::`).
+
+### Corrigido
+
+- Corrigida a renderização de cores quando o workflow emite escapes ANSI em formato textual (`\\033[`, `\\x1b[`, `\\u001b[`) além do escape real.
+- Corrigido o acoplamento a formatos de logger customizados, permitindo que qualquer função interna baseada em ANSI funcione sem regra específica no parser.
+
+## v2.10.5
+
+### Adicionado
+
+- Adicionado suporte para nível de log `notice` no pipeline de eventos e na UI de logs.
+- Adicionada renderização de sequências ANSI (`\x1b[...m`) no painel de logs para exibir cores reais emitidas pelo workflow.
+- Adicionados testes de regressão cobrindo parse de `::notice::`, `::error::` e `[INFO]`.
+
+### Alterado
+
+- O parser de logs agora interpreta comandos do GitHub Actions (`::notice::`, `::warning::`, `::error::`, `::debug::`) e remove o prefixo técnico da mensagem exibida.
+- Logs com prefixo `logger::info` e `[INFO]` agora são tratados como `notice` para visualização em azul no painel.
+
+### Corrigido
+
+- Corrigida a exibição de mensagens `::notice::` e `::error::` que antes apareciam como texto cru sem coloração contextual.
+- Corrigida a perda de cores de linhas com ANSI no webview, que antes eram mostradas sempre em cor neutra.
+
 ## v2.10.3
 
 ### Adicionado

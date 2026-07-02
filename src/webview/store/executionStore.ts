@@ -29,7 +29,7 @@ export interface LogLine {
   jobId?: string;
   stepId?: string;
   line: string;
-  level: 'info' | 'warn' | 'error' | 'debug';
+  level: 'info' | 'warn' | 'error' | 'debug' | 'notice';
   timestamp: string;
 }
 
