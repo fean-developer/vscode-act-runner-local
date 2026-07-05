@@ -1,6 +1,6 @@
 // Tipos do sistema de eventos — discriminated unions para type-safety total
 
-import type { ExecutionStatus, JobStatus, StepStatus } from './execution.types';
+import type { ExecutionGraphHistory, ExecutionStatus, JobStatus, StepStatus } from './execution.types';
 import type { JobDefinition } from './workflow.types';
 
 export interface ExecutionStartPayload {
@@ -85,14 +85,16 @@ export type WebviewMessage =
 
 // Comandos enviados da Webview para o Extension Host
 export type WebviewCommand =
-  | { type: 'command:run';       payload: { workflowPath?: string; jobId?: string; dryRun?: boolean; workflowInputs?: Record<string, string | number | boolean> } }
+  | { type: 'command:run';       payload: { workflowPath?: string; jobId?: string; dryRun?: boolean; workflowInputs?: Record<string, string | number | boolean>; workflowRef?: string } }
   | { type: 'command:quickRun';  payload: { workflowPath: string } }
   | { type: 'command:stop';      payload: { executionId: string } }
   | { type: 'command:rerun';     payload: { executionId: string } }
+  | { type: 'command:restoreHistoryRepository'; payload: { executionId: string } }
   | { type: 'command:selectProject'; payload: Record<string, never> }
   | { type: 'command:locateAct'; payload: Record<string, never> }
   | { type: 'command:loadEnv';      payload: { tab: string; filePath?: string } }
   | { type: 'command:selectEnvFile'; payload: { tab: string } }
   | { type: 'command:saveEnv';      payload: { tab: string; rows: { key: string; value: string }[]; filePath?: string } }
+  | { type: 'command:saveGraphHistory'; payload: { executionId: string; graphHistory: ExecutionGraphHistory } }
   | { type: 'command:deleteHistory'; payload: { executionId: string } }
   | { type: 'state:request';        payload: Record<string, never> };

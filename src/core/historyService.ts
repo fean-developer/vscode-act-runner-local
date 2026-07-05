@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { ExecutionRecord } from '../types/execution.types';
+import type { ExecutionGraphHistory, ExecutionRecord } from '../types/execution.types';
 
 const HISTORY_KEY = 'actRunner.executionHistory';
 const MAX_RECORDS = 100;
@@ -12,6 +12,7 @@ export interface HistoryFilter {
 
 export class HistoryService {
   private context: vscode.ExtensionContext | null = null;
+  private pendingGraphHistory = new Map<string, ExecutionGraphHistory>();
 
   initialize(context: vscode.ExtensionContext): void {
     this.context = context;
@@ -19,6 +20,11 @@ export class HistoryService {
 
   async save(record: ExecutionRecord): Promise<void> {
     if (!this.context) return;
+    const pendingGraphHistory = this.pendingGraphHistory.get(record.id);
+    if (pendingGraphHistory) {
+      record = { ...record, graphHistory: pendingGraphHistory };
+      this.pendingGraphHistory.delete(record.id);
+    }
     const history = this.getAll();
     history.unshift(record);
     await this.context.globalState.update(HISTORY_KEY, history.slice(0, MAX_RECORDS));
@@ -45,6 +51,19 @@ export class HistoryService {
   async deleteById(id: string): Promise<void> {
     if (!this.context) return;
     const history = this.getAll().filter((r) => r.id !== id);
+    await this.context.globalState.update(HISTORY_KEY, history);
+  }
+
+  async updateGraphHistory(id: string, graphHistory: ExecutionGraphHistory): Promise<void> {
+    if (!this.context) return;
+    let found = false;
+    const history = this.getAll().map((record) => (
+      record.id === id ? (found = true, { ...record, graphHistory }) : record
+    ));
+    if (!found) {
+      this.pendingGraphHistory.set(id, graphHistory);
+      return;
+    }
     await this.context.globalState.update(HISTORY_KEY, history);
   }
 

@@ -1,5 +1,34 @@
 # Changelog
 
+## v2.10.15
+
+### Corrigido
+
+- Ao abrir uma execução pelo Histórico, o repositório selecionado agora volta para o projeto em que aquela execução foi feita.
+- Re-execuções vindas do Histórico agora usam o root do workflow original para resolver workflows, variáveis e secrets.
+
+## v2.10.14
+
+### Adicionado
+
+- O modal **Run workflow** agora permite escolher a branch usada no evento `workflow_dispatch`.
+- A branch selecionada é enviada no payload do `act` como `ref`, em vez de usar sempre `refs/heads/main`.
+
+## v2.10.13
+
+### Corrigido
+
+- Os snapshots do grafo agora são persistidos no histórico da extensão, permitindo reabrir o painel e continuar acessando o grafo final e a timeline de logs da execução.
+- Corrigida a perda do link de restauração no Histórico quando a webview era fechada e aberta novamente.
+
+## v2.10.12
+
+### Adicionado
+
+- Adicionado histórico visual do grafo por linha de log: ao clicar em uma linha, o grafo volta para o estado daquela execução naquele momento.
+- Adicionado botão para retornar ao estado mais recente do grafo após navegar por um ponto anterior do log.
+- Execuções concluídas nesta sessão agora podem ser reabertas pelo painel Histórico para restaurar o grafo final daquela execução.
+
 ## v2.10.11
 
 ### Alterado

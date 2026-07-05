@@ -9,11 +9,18 @@ export function WorkflowRunDialog() {
     workflows,
     workflowRunDialogPath,
     workflowInputValues,
+    workflowBranches,
+    repository,
     closeWorkflowRunDialog,
     setWorkflowInputValue,
     setWorkflowInputValues,
+    setWorkflowBranch,
   } = useExecutionStore();
   const workflow = workflows.find((item) => item.filePath === workflowRunDialogPath);
+  const branchOptions = repository?.branches ?? [];
+  const selectedBranch = workflow
+    ? workflowBranches[workflow.filePath] ?? repository?.currentBranch ?? branchOptions[0] ?? 'main'
+    : 'main';
 
   const initialValues = useMemo(() => {
     const values: Record<string, InputValue> = {};
@@ -45,9 +52,10 @@ export function WorkflowRunDialog() {
   const run = () => {
     if (missingRequired) return;
     setWorkflowInputValues(workflow.filePath, values);
+    setWorkflowBranch(workflow.filePath, selectedBranch);
     (window as WebviewWindow).__vscode__?.postMessage({
       type: 'command:run',
-      payload: { workflowPath: workflow.filePath, workflowInputs: values },
+      payload: { workflowPath: workflow.filePath, workflowInputs: values, workflowRef: selectedBranch },
     });
     closeWorkflowRunDialog();
   };
@@ -65,7 +73,22 @@ export function WorkflowRunDialog() {
 
         <div style={styles.branchBox}>
           <div style={styles.label}>Use workflow from</div>
-          <div style={styles.branchPill}>Branch: main</div>
+          {branchOptions.length > 0 ? (
+            <select
+              style={styles.input}
+              value={selectedBranch}
+              onChange={(event) => setWorkflowBranch(workflow.filePath, event.target.value)}
+            >
+              {branchOptions.map((branch) => <option key={branch} value={branch}>{branch}</option>)}
+            </select>
+          ) : (
+            <input
+              style={styles.input}
+              value={selectedBranch}
+              onChange={(event) => setWorkflowBranch(workflow.filePath, event.target.value)}
+              placeholder="main"
+            />
+          )}
         </div>
 
         <div style={styles.inputs}>
@@ -142,7 +165,6 @@ const styles: Record<string, React.CSSProperties> = {
   closeButton: { border: 'none', background: 'transparent', color: '#8b949e', fontSize: 22, cursor: 'pointer', lineHeight: 1 },
   branchBox: { padding: '14px 16px', borderBottom: '1px solid #30363d' },
   label: { marginBottom: 8, fontSize: 12, fontWeight: 700, color: '#e6edf3' },
-  branchPill: { display: 'inline-flex', padding: '6px 10px', border: '1px solid #30363d', borderRadius: 6, background: '#161b22', fontSize: 12 },
   inputs: { padding: 16, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 14 },
   field: { display: 'flex', flexDirection: 'column', gap: 6 },
   fieldLabel: { color: '#e6edf3', fontSize: 12, fontWeight: 600, lineHeight: 1.45 },

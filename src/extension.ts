@@ -260,10 +260,35 @@ function getWorkflowDispatchInputs(workflow: WorkflowDefinition): Array<{ name: 
   });
 }
 
-function getRepositorySnapshot(): { root: string; name: string } | null {
+function getRepositorySnapshot(): { root: string; name: string; currentBranch?: string; branches?: string[] } | null {
   const root = workspaceRoot();
   if (!root) return null;
-  return { root, name: path.basename(root) };
+  const { currentBranch, branches } = getGitBranchSnapshot(root);
+  return { root, name: path.basename(root), currentBranch, branches };
+}
+
+function getWorkflowProjectRoot(workflowPath: string): string {
+  const marker = `${path.sep}.github${path.sep}workflows${path.sep}`;
+  const index = workflowPath.indexOf(marker);
+  return index >= 0 ? workflowPath.slice(0, index) : path.dirname(path.dirname(path.dirname(workflowPath)));
+}
+
+function getGitBranchSnapshot(root: string): { currentBranch?: string; branches: string[] } {
+  try {
+    const childProcess = require('child_process') as typeof import('child_process');
+    const currentBranch = childProcess.execFileSync('git', ['-C', root, 'branch', '--show-current'], { encoding: 'utf8' }).trim() || undefined;
+    const branchOutput = childProcess.execFileSync('git', ['-C', root, 'branch', '--format=%(refname:short)'], { encoding: 'utf8' });
+    const branches = Array.from(new Set(
+      branchOutput
+        .split('\n')
+        .map((branch: string) => branch.trim())
+        .filter(Boolean)
+    ));
+    if (currentBranch && !branches.includes(currentBranch)) branches.unshift(currentBranch);
+    return { currentBranch, branches };
+  } catch {
+    return { branches: [] };
+  }
 }
 
 function sendWorkflowSnapshot(): void {
@@ -424,7 +449,8 @@ function openWebviewPanel(context: vscode.ExtensionContext, initialView: string,
         const workflowPath = opts.workflowPath ?? (await pickWorkflow());
         if (!workflowPath) break;
         const workflowInputs = (msg.payload as { workflowInputs?: Record<string, string | number | boolean> }).workflowInputs;
-        const eventPayloadPath = workflowInputs ? createWorkflowDispatchPayload(workflowInputs) : opts.eventPayloadPath;
+        const workflowRef = (msg.payload as { workflowRef?: string }).workflowRef;
+        const eventPayloadPath = workflowInputs ? createWorkflowDispatchPayload(workflowInputs, workflowRef) : opts.eventPayloadPath;
         await safeRun(() => executionEngine.run({
           ...opts,
           workflowPath,
@@ -453,15 +479,33 @@ function openWebviewPanel(context: vscode.ExtensionContext, initialView: string,
       case 'command:rerun': {
         const record = historyService.getById(msg.payload.executionId);
         if (record) {
+          const root = getWorkflowProjectRoot(record.workflowPath);
+          workflowExplorer.setProjectRoot(root);
+          envManager.ensureSecretsIgnored(root);
+          sendWorkflowSnapshot();
           await safeRun(() =>
             executionEngine.run({
               workflowPath: record.workflowPath,
               jobId: record.jobId,
               dryRun: record.dryRun,
               trigger: 'replay',
+              workspaceRoot: root,
             })
           );
         }
+        break;
+      }
+      case 'command:restoreHistoryRepository': {
+        const record = historyService.getById(msg.payload.executionId);
+        if (!record) break;
+        const root = getWorkflowProjectRoot(record.workflowPath);
+        workflowExplorer.setProjectRoot(root);
+        envManager.ensureSecretsIgnored(root);
+        workflowExplorer.refresh();
+        webviewPanel?.webview.postMessage({
+          type: 'state:snapshot',
+          payload: { workflows: getWorkflowSummaries(), repository: getRepositorySnapshot() },
+        });
         break;
       }
       case 'command:loadEnv': {
@@ -566,6 +610,15 @@ function openWebviewPanel(context: vscode.ExtensionContext, initialView: string,
         });
         break;
       }
+      case 'command:saveGraphHistory': {
+        const { executionId, graphHistory } = msg.payload;
+        await historyService.updateGraphHistory(executionId, graphHistory);
+        webviewPanel?.webview.postMessage({
+          type: 'state:snapshot',
+          payload: { history: historyService.getAll() },
+        });
+        break;
+      }
       case 'state:request':
         webviewPanel?.webview.postMessage({
           type: 'state:snapshot',
@@ -651,10 +704,11 @@ function resolveEnvEditorFilePath(root: string, tab: string, clientFilePath?: st
   return defaultPath && fsNode.existsSync(defaultPath) ? defaultPath : undefined;
 }
 
-function createWorkflowDispatchPayload(inputs: Record<string, string | number | boolean>): string {
+function createWorkflowDispatchPayload(inputs: Record<string, string | number | boolean>, ref = 'main'): string {
   const filePath = path.join(os.tmpdir(), `act-workflow-dispatch-${Date.now()}.json`);
+  const normalizedRef = ref.startsWith('refs/') ? ref : `refs/heads/${ref || 'main'}`;
   const payload = {
-    ref: 'refs/heads/main',
+    ref: normalizedRef,
     inputs,
   };
   require('fs').writeFileSync(filePath, JSON.stringify(payload, null, 2), 'utf-8');

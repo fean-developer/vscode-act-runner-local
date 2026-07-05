@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { ActEvent, StepUpdatePayload, JobUpdatePayload, LogPayload, ExecutionStartPayload, ExecutionEndPayload, SummaryUpdatePayload } from '../../types/events.types';
-import type { ExecutionRecord } from '../../types/execution.types';
+import type { ExecutionGraphHistory, ExecutionGraphSnapshot, ExecutionRecord } from '../../types/execution.types';
 import type { WorkflowGraph } from '../../types/workflow.types';
 
 export type NodeStatus = 'idle' | 'running' | 'success' | 'failed' | 'skipped';
@@ -44,6 +44,13 @@ export interface ExecutionState {
   duration: number | null;
 }
 
+interface GraphTimelineSnapshot {
+  execution: ExecutionState;
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+  summaryContent: string;
+}
+
 export interface WorkflowListItem {
   name: string;
   filePath: string;
@@ -66,6 +73,8 @@ export interface WorkflowInputItem {
 export interface RepositoryInfo {
   root: string;
   name: string;
+  currentBranch?: string;
+  branches?: string[];
 }
 
 interface StoreState {
@@ -90,6 +99,7 @@ interface StoreState {
   selectedWorkflowPath: string | null;
   workflowRunDialogPath: string | null;
   workflowInputValues: Record<string, Record<string, WorkflowInputValue>>;
+  workflowBranches: Record<string, string>;
   repository: RepositoryInfo | null;
   // Logs por execução (salvo ao final de cada execução, para exibir no histórico)
   historyLogs: Record<string, string[]>;
@@ -99,6 +109,12 @@ interface StoreState {
 
   // GITHUB_STEP_SUMMARY — conteúdo Markdown acumulado por execução
   summaryContent: string;
+
+  // Snapshots do grafo associados às linhas de log para navegar no estado da execução
+  graphSnapshotsByLogId: Record<string, GraphTimelineSnapshot>;
+  liveGraphSnapshot: GraphTimelineSnapshot | null;
+  graphSnapshotsByExecutionId: Record<string, GraphTimelineSnapshot>;
+  selectedTimelineLogId: string | null;
 
   // Ações
   setView: (view: AppView) => void;
@@ -112,7 +128,12 @@ interface StoreState {
   closeWorkflowRunDialog: () => void;
   setWorkflowInputValue: (workflowPath: string, inputName: string, value: WorkflowInputValue) => void;
   setWorkflowInputValues: (workflowPath: string, values: Record<string, WorkflowInputValue>) => void;
+  setWorkflowBranch: (workflowPath: string, branch: string) => void;
   setLogFilter: (filter: { jobId: string; stepLabel?: string; label: string } | null) => void;
+  restoreGraphAtLog: (logId: string) => void;
+  restoreGraphForExecution: (executionId: string) => void;
+  restoreLatestGraphState: () => void;
+  getExecutionGraphHistory: (executionId: string) => ExecutionGraphHistory | undefined;
 }
 
 const initialExecution: ExecutionState = {
@@ -127,7 +148,7 @@ const initialExecution: ExecutionState = {
 
 let logCounter = 0;
 
-export const useExecutionStore = create<StoreState>((set) => ({
+export const useExecutionStore = create<StoreState>((set, get) => ({
   currentView: 'graph',
   execution: initialExecution,
   nodes: [],
@@ -138,14 +159,25 @@ export const useExecutionStore = create<StoreState>((set) => ({
   selectedWorkflowPath: null,
   workflowRunDialogPath: null,
   workflowInputValues: {},
+  workflowBranches: {},
   repository: null,
   historyLogs: {},
   logFilter: null,
   summaryContent: '',
+  graphSnapshotsByLogId: {},
+  liveGraphSnapshot: null,
+  graphSnapshotsByExecutionId: {},
+  selectedTimelineLogId: null,
 
   setView: (view) => set({ currentView: view }),
 
-  setHistory: (records) => set({ history: records }),
+  setHistory: (records) => set((s) => ({
+    history: records,
+    graphSnapshotsByExecutionId: {
+      ...s.graphSnapshotsByExecutionId,
+      ...buildExecutionSnapshotIndex(records),
+    },
+  })),
 
   setWorkflows: (records) => set((s) => ({
     workflows: records,
@@ -179,16 +211,111 @@ export const useExecutionStore = create<StoreState>((set) => ({
     },
   })),
 
+  setWorkflowBranch: (workflowPath, branch) => set((s) => ({
+    workflowBranches: {
+      ...s.workflowBranches,
+      [workflowPath]: branch,
+    },
+  })),
+
   setLogFilter: (filter) => set({ logFilter: filter }),
 
+  restoreGraphAtLog: (logId) => set((s) => {
+    const snapshot = s.graphSnapshotsByLogId[logId];
+    if (!snapshot) return {};
+    return {
+      execution: { ...snapshot.execution },
+      nodes: cloneNodes(snapshot.nodes),
+      edges: cloneEdges(snapshot.edges),
+      summaryContent: snapshot.summaryContent,
+      selectedTimelineLogId: logId,
+      currentView: 'graph',
+    };
+  }),
+
+  restoreGraphForExecution: (executionId) => set((s) => {
+    const record = s.history.find((item) => item.id === executionId);
+    const snapshot = record?.graphHistory?.final ?? s.graphSnapshotsByExecutionId[executionId];
+    if (!snapshot) return {};
+    const restoredLogs = record?.graphHistory?.timeline.map((entry, index) => ({
+      id: historicalLogId(executionId, index),
+      executionId,
+      jobId: entry.jobId,
+      stepId: entry.stepId,
+      line: entry.line,
+      level: entry.level,
+      timestamp: entry.timestamp,
+    })) ?? s.logs;
+    const restoredLogSnapshots = record?.graphHistory?.timeline.reduce<Record<string, GraphTimelineSnapshot>>((acc, entry, index) => {
+      acc[historicalLogId(executionId, index)] = fromPersistedSnapshot(entry.snapshot);
+      return acc;
+    }, {}) ?? s.graphSnapshotsByLogId;
+    return {
+      execution: { ...snapshot.execution },
+      nodes: cloneNodes(snapshot.nodes),
+      edges: cloneEdges(snapshot.edges),
+      logs: restoredLogs,
+      graphSnapshotsByLogId: restoredLogSnapshots,
+      summaryContent: snapshot.summaryContent,
+      selectedTimelineLogId: null,
+      currentView: 'graph',
+    };
+  }),
+
+  restoreLatestGraphState: () => set((s) => {
+    const snapshot = s.liveGraphSnapshot;
+    if (!snapshot) return { selectedTimelineLogId: null };
+    return {
+      execution: { ...snapshot.execution },
+      nodes: cloneNodes(snapshot.nodes),
+      edges: cloneEdges(snapshot.edges),
+      summaryContent: snapshot.summaryContent,
+      selectedTimelineLogId: null,
+      currentView: 'graph',
+    };
+  }),
+
+  getExecutionGraphHistory: (executionId) => {
+    const state = get();
+    const final = state.graphSnapshotsByExecutionId[executionId] ?? state.liveGraphSnapshot;
+    if (!final) return undefined;
+    return {
+      final: toPersistedSnapshot(final),
+      timeline: state.logs
+        .filter((log) => log.executionId === executionId)
+        .map((log) => {
+          const snapshot = state.graphSnapshotsByLogId[log.id] ?? final;
+          return {
+            line: log.line,
+            level: log.level,
+            timestamp: log.timestamp,
+            jobId: log.jobId,
+            stepId: log.stepId,
+            snapshot: toPersistedSnapshot(snapshot),
+          };
+        }),
+    };
+  },
+
   resetExecution: () =>
-    set({ execution: initialExecution, nodes: [], edges: [], logs: [], logFilter: null, summaryContent: '' }),
+    set({
+      execution: initialExecution,
+      nodes: [],
+      edges: [],
+      logs: [],
+      logFilter: null,
+      summaryContent: '',
+      graphSnapshotsByLogId: {},
+      liveGraphSnapshot: null,
+      graphSnapshotsByExecutionId: {},
+      selectedTimelineLogId: null,
+    }),
 
   handleEvent: (event) => {
     switch (event.type) {
       case 'execution:start':
-        set((s) => ({
-          execution: {
+        set((s) => {
+          const execution: ExecutionState = {
             executionId: event.payload.executionId,
             status: 'running',
             workflowName: event.payload.workflowName,
@@ -196,15 +323,23 @@ export const useExecutionStore = create<StoreState>((set) => ({
             startedAt: event.payload.triggeredAt,
             completedAt: null,
             duration: null,
-          },
-          selectedWorkflowPath: event.payload.workflowPath,
-          logs: [],
-          nodes: buildInitialNodes(event.payload),
-          edges: buildInitialEdges(event.payload),
-          currentView: 'graph',
-          logFilter: null, // limpar filtro ao iniciar nova execução
-          summaryContent: '', // limpar summary da execução anterior
-        }));
+          };
+          const nodes = buildInitialNodes(event.payload);
+          const edges = buildInitialEdges(event.payload);
+          return {
+            execution,
+            selectedWorkflowPath: event.payload.workflowPath,
+            logs: [],
+            nodes,
+            edges,
+            currentView: 'graph',
+            logFilter: null, // limpar filtro ao iniciar nova execução
+            summaryContent: '', // limpar summary da execução anterior
+            graphSnapshotsByLogId: {},
+            liveGraphSnapshot: createGraphSnapshot(s, { execution, nodes, edges, summaryContent: '' }),
+            selectedTimelineLogId: null,
+          };
+        });
         break;
 
       case 'job:update': {
@@ -227,28 +362,32 @@ export const useExecutionStore = create<StoreState>((set) => ({
               status: status as NodeStatus, startedAt, completedAt,
               duration: duration ?? calculateDuration(startedAt, completedAt),
             };
-            return { nodes: [...s.nodes, newJob] };
+            const nodes = [...s.nodes, newJob];
+            return { nodes, liveGraphSnapshot: createGraphSnapshot(s, { nodes }), selectedTimelineLogId: null };
           }
           const TERMINAL: NodeStatus[] = ['success', 'failed'];
+          const nodes = s.nodes.map(n => {
+            if (n.id !== matchingNode.id) return n;
+            if (status === 'running' && TERMINAL.includes(n.status)) return n;
+            // Resolver label de template para o nome real
+            // ex: "Build (${{ needs.setup.outputs.language }})" → "Build (dotnet)"
+            const resolvedLabel = matchesTemplate(jobId, n.label) ? (jobName ?? jobId) : n.label;
+            const nextStartedAt = startedAt ?? n.startedAt;
+            const nextCompletedAt = completedAt ?? n.completedAt;
+            const nextDuration = duration ?? n.duration ?? calculateDuration(nextStartedAt, nextCompletedAt);
+            return {
+              ...n,
+              label: resolvedLabel,
+              status: (status as NodeStatus) ?? n.status,
+              ...(startedAt && { startedAt }),
+              ...(completedAt && { completedAt }),
+              ...(nextDuration !== undefined && { duration: nextDuration }),
+            };
+          });
           return {
-            nodes: s.nodes.map(n => {
-              if (n.id !== matchingNode.id) return n;
-              if (status === 'running' && TERMINAL.includes(n.status)) return n;
-              // Resolver label de template para o nome real
-              // ex: "Build (${{ needs.setup.outputs.language }})" → "Build (dotnet)"
-              const resolvedLabel = matchesTemplate(jobId, n.label) ? (jobName ?? jobId) : n.label;
-              const nextStartedAt = startedAt ?? n.startedAt;
-              const nextCompletedAt = completedAt ?? n.completedAt;
-              const nextDuration = duration ?? n.duration ?? calculateDuration(nextStartedAt, nextCompletedAt);
-              return {
-                ...n,
-                label: resolvedLabel,
-                status: (status as NodeStatus) ?? n.status,
-                ...(startedAt && { startedAt }),
-                ...(completedAt && { completedAt }),
-                ...(nextDuration !== undefined && { duration: nextDuration }),
-              };
-            }),
+            nodes,
+            liveGraphSnapshot: createGraphSnapshot(s, { nodes }),
+            selectedTimelineLogId: null,
           };
         });
         break;
@@ -285,88 +424,178 @@ export const useExecutionStore = create<StoreState>((set) => ({
               id: nodeId, type: 'step', label: normalizedStep, parentId: realParentId,
               status: status as NodeStatus, startedAt, completedAt, duration,
             };
-            return { nodes: [...nodes, newStep] };
+            const nextNodes = [...nodes, newStep];
+            return { nodes: nextNodes, liveGraphSnapshot: createGraphSnapshot(s, { nodes: nextNodes }), selectedTimelineLogId: null };
           }
-          return { nodes: updateNode(nodes, nodeId, event.payload) };
+          const nextNodes = updateNode(nodes, nodeId, event.payload);
+          return { nodes: nextNodes, liveGraphSnapshot: createGraphSnapshot(s, { nodes: nextNodes }), selectedTimelineLogId: null };
         });
         break;
       }
 
       case 'log':
-        set((s) => ({
-          logs: [
-            ...s.logs.slice(-999), // manter apenas os últimos 1000 logs
-            {
-              id: `log-${++logCounter}`,
-              executionId: event.payload.executionId,
-              jobId: event.payload.jobId,
-              stepId: event.payload.stepId,
-              line: event.payload.line,
-              level: event.payload.level,
-              timestamp: event.payload.timestamp,
-            },
-          ],
-        }));
+        set((s) => {
+          const id = `log-${++logCounter}`;
+          const keptLogs = s.logs.slice(-999); // manter apenas os últimos 1000 logs
+          const graphSnapshotsByLogId: Record<string, GraphTimelineSnapshot> = {};
+          keptLogs.forEach((log) => {
+            const snapshot = s.graphSnapshotsByLogId[log.id];
+            if (snapshot) graphSnapshotsByLogId[log.id] = snapshot;
+          });
+          graphSnapshotsByLogId[id] = createGraphSnapshot(s);
+          return {
+            logs: [
+              ...keptLogs,
+              {
+                id,
+                executionId: event.payload.executionId,
+                jobId: event.payload.jobId,
+                stepId: event.payload.stepId,
+                line: event.payload.line,
+                level: event.payload.level,
+                timestamp: event.payload.timestamp,
+              },
+            ],
+            graphSnapshotsByLogId,
+          };
+        });
         break;
 
       case 'execution:end': {
         const { executionId, status: endStatus, completedAt } = event.payload;
         const nodeStatus: NodeStatus = endStatus === 'success' ? 'success' : 'failed';
-        set((s) => ({
-          execution: {
+        set((s) => {
+          const execution: ExecutionState = {
             ...s.execution,
             status: endStatus,
             completedAt,
             duration: event.payload.duration > 0
               ? event.payload.duration
               : calculateDuration(s.execution.startedAt ?? undefined, completedAt) ?? null,
-          },
+          };
           // Fallback: any node still in 'running' at execution end transitions to final state.
-          nodes: endStatus === 'cancelled'
+          const nodes = endStatus === 'cancelled'
             ? s.nodes
             : s.nodes.map((n) => {
                 if (n.status !== 'running') return n;
                 const duration = calculateDuration(n.startedAt, completedAt);
                 return { ...n, status: nodeStatus, completedAt, ...(duration !== undefined && { duration }) };
-              }),
-          // Salvar os logs desta execução para exibir no histórico
-          historyLogs: {
-            ...s.historyLogs,
-            [executionId]: s.logs.map((l) => l.line),
-          },
-        }));
+              });
+          return {
+            execution,
+            nodes,
+            // Salvar os logs desta execução para exibir no histórico
+            historyLogs: {
+              ...s.historyLogs,
+              [executionId]: s.logs.map((l) => l.line),
+            },
+            liveGraphSnapshot: createGraphSnapshot(s, { execution, nodes }),
+            graphSnapshotsByExecutionId: {
+              ...s.graphSnapshotsByExecutionId,
+              [executionId]: createGraphSnapshot(s, { execution, nodes }),
+            },
+            selectedTimelineLogId: null,
+          };
+        });
         break;
       }
 
       case 'execution:error':
-        set((s) => ({
-          execution: {
+        set((s) => {
+          const execution: ExecutionState = {
             ...s.execution,
             status: 'failed',
             completedAt: new Date().toISOString(),
             duration: calculateDuration(s.execution.startedAt ?? undefined, new Date().toISOString()) ?? s.execution.duration,
-          },
-          logs: [
-            ...s.logs,
-            {
-              id: `log-${++logCounter}`,
-              executionId: event.payload.executionId,
-              line: `❌ Erro crítico: ${event.payload.error}`,
-              level: 'error',
-              timestamp: new Date().toISOString(),
-            },
-          ],
-        }));
+          };
+          const id = `log-${++logCounter}`;
+          const graphSnapshotsByLogId = {
+            ...s.graphSnapshotsByLogId,
+            [id]: createGraphSnapshot(s, { execution }),
+          };
+          return {
+            execution,
+            logs: [
+              ...s.logs,
+              {
+                id,
+                executionId: event.payload.executionId,
+                line: `❌ Erro crítico: ${event.payload.error}`,
+                level: 'error',
+                timestamp: new Date().toISOString(),
+              },
+            ],
+            graphSnapshotsByLogId,
+            liveGraphSnapshot: createGraphSnapshot(s, { execution }),
+            selectedTimelineLogId: null,
+          };
+        });
         break;
 
       case 'summary:update':
-        set({ summaryContent: event.payload.content });
+        set((s) => ({
+          summaryContent: event.payload.content,
+          liveGraphSnapshot: createGraphSnapshot(s, { summaryContent: event.payload.content }),
+        }));
         break;
     }
   },
 }));
 
 // ─── Helpers do store ─────────────────────────────────────────────────────
+
+function cloneNodes(nodes: GraphNode[]): GraphNode[] {
+  return nodes.map((node) => ({ ...node }));
+}
+
+function cloneEdges(edges: GraphEdge[]): GraphEdge[] {
+  return edges.map((edge) => ({ ...edge }));
+}
+
+function historicalLogId(executionId: string, index: number): string {
+  return `history-${executionId}-${index}`;
+}
+
+function buildExecutionSnapshotIndex(records: ExecutionRecord[]): Record<string, GraphTimelineSnapshot> {
+  return records.reduce<Record<string, GraphTimelineSnapshot>>((acc, record) => {
+    if (record.graphHistory?.final) acc[record.id] = fromPersistedSnapshot(record.graphHistory.final);
+    return acc;
+  }, {});
+}
+
+function toPersistedSnapshot(snapshot: GraphTimelineSnapshot): ExecutionGraphSnapshot {
+  return {
+    execution: { ...snapshot.execution },
+    nodes: snapshot.nodes.map((node) => ({ ...node })),
+    edges: snapshot.edges.map((edge) => ({ ...edge })),
+    summaryContent: snapshot.summaryContent,
+  };
+}
+
+function fromPersistedSnapshot(snapshot: ExecutionGraphSnapshot): GraphTimelineSnapshot {
+  return {
+    execution: { ...snapshot.execution },
+    nodes: cloneNodes(snapshot.nodes as GraphNode[]),
+    edges: cloneEdges(snapshot.edges),
+    summaryContent: snapshot.summaryContent,
+  };
+}
+
+function createGraphSnapshot(
+  state: Pick<StoreState, 'execution' | 'nodes' | 'edges' | 'summaryContent'>,
+  overrides: Partial<Pick<StoreState, 'execution' | 'nodes' | 'edges' | 'summaryContent'>> = {}
+): GraphTimelineSnapshot {
+  const execution = overrides.execution ?? state.execution;
+  const nodes = overrides.nodes ?? state.nodes;
+  const edges = overrides.edges ?? state.edges;
+  const summaryContent = overrides.summaryContent ?? state.summaryContent;
+  return {
+    execution: { ...execution },
+    nodes: cloneNodes(nodes),
+    edges: cloneEdges(edges),
+    summaryContent,
+  };
+}
 
 function buildInitialNodes(payload: ExecutionStartPayload): GraphNode[] {
   const nodes: GraphNode[] = [];

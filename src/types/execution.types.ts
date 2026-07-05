@@ -25,6 +25,52 @@ export interface JobResult {
   steps: StepResult[];
 }
 
+export interface ExecutionGraphNodeSnapshot {
+  id: string;
+  type: 'job' | 'step';
+  label: string;
+  parentId?: string;
+  status: JobStatus | StepStatus;
+  startedAt?: string;
+  completedAt?: string;
+  duration?: number;
+}
+
+export interface ExecutionGraphEdgeSnapshot {
+  id: string;
+  source: string;
+  target: string;
+}
+
+export interface ExecutionGraphSnapshot {
+  execution: {
+    executionId: string | null;
+    status: ExecutionStatus;
+    workflowName: string;
+    workflowPath: string | null;
+    startedAt: string | null;
+    completedAt: string | null;
+    duration: number | null;
+  };
+  nodes: ExecutionGraphNodeSnapshot[];
+  edges: ExecutionGraphEdgeSnapshot[];
+  summaryContent: string;
+}
+
+export interface ExecutionGraphTimelineEntry {
+  line: string;
+  level: 'info' | 'warn' | 'error' | 'debug' | 'notice';
+  timestamp: string;
+  jobId?: string;
+  stepId?: string;
+  snapshot: ExecutionGraphSnapshot;
+}
+
+export interface ExecutionGraphHistory {
+  final: ExecutionGraphSnapshot;
+  timeline: ExecutionGraphTimelineEntry[];
+}
+
 export interface ExecutionRecord {
   id: string;
   workflowPath: string;
@@ -39,6 +85,7 @@ export interface ExecutionRecord {
   actArgs: string[];
   jobs: JobResult[];
   logSummary: string;
+  graphHistory?: ExecutionGraphHistory;
 }
 
 export interface ExecutionOptions {

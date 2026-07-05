@@ -207,6 +207,9 @@ export function LogPanel({ height }: { height: number }) {
   const logs = useExecutionStore((s) => s.logs);
   const logFilter = useExecutionStore((s) => s.logFilter);
   const setLogFilter = useExecutionStore((s) => s.setLogFilter);
+  const selectedTimelineLogId = useExecutionStore((s) => s.selectedTimelineLogId);
+  const restoreGraphAtLog = useExecutionStore((s) => s.restoreGraphAtLog);
+  const restoreLatestGraphState = useExecutionStore((s) => s.restoreLatestGraphState);
   const bodyRef = useRef<HTMLDivElement>(null);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
 
@@ -294,7 +297,16 @@ export function LogPanel({ height }: { height: number }) {
             </button>
           </span>
         ) : (
-          <span style={styles.headerHint}>Clique em um job ou step para filtrar</span>
+          <span style={styles.headerHint}>Clique em um job/step para filtrar ou em uma linha para restaurar o grafo naquele momento</span>
+        )}
+        {selectedTimelineLogId && (
+          <button
+            style={styles.clearBtn}
+            onClick={restoreLatestGraphState}
+            title="Voltar ao estado mais recente do grafo"
+          >
+            voltar ao atual
+          </button>
         )}
       </div>
       <div ref={bodyRef} style={styles.body}>
@@ -307,7 +319,17 @@ export function LogPanel({ height }: { height: number }) {
             if (item.type === 'line') {
               const color = levelColor(item.log.level);
               return (
-                <div key={item.log.id} style={{ color, lineHeight: 1.5 }}>
+                <div
+                  key={item.log.id}
+                  style={{
+                    ...styles.logLine,
+                    color,
+                    background: selectedTimelineLogId === item.log.id ? '#1f6feb22' : undefined,
+                    borderLeftColor: selectedTimelineLogId === item.log.id ? '#58a6ff' : 'transparent',
+                  }}
+                  onClick={() => restoreGraphAtLog(item.log.id)}
+                  title="Restaurar o grafo neste ponto do log"
+                >
                   {renderLogText(item.log.line, color)}
                 </div>
               );
@@ -333,7 +355,17 @@ export function LogPanel({ height }: { height: number }) {
                 {isExpanded && (
                   <div style={styles.groupBody}>
                     {item.lines.map((l) => (
-                      <div key={l.id} style={{ color: levelColor(l.level), lineHeight: 1.5 }}>
+                      <div
+                        key={l.id}
+                        style={{
+                          ...styles.logLine,
+                          color: levelColor(l.level),
+                          background: selectedTimelineLogId === l.id ? '#1f6feb22' : undefined,
+                          borderLeftColor: selectedTimelineLogId === l.id ? '#58a6ff' : 'transparent',
+                        }}
+                        onClick={() => restoreGraphAtLog(l.id)}
+                        title="Restaurar o grafo neste ponto do log"
+                      >
                         {renderLogText(l.line, levelColor(l.level))}
                       </div>
                     ))}
@@ -356,6 +388,7 @@ const styles: Record<string, React.CSSProperties> = {
   breadcrumbLabel: { color: '#58a6ff', fontWeight: 500 },
   clearBtn: { padding: '1px 7px', border: '1px solid #30363d', borderRadius: 3, background: 'transparent', color: '#6e7681', cursor: 'pointer', fontSize: 10 },
   body: { flex: 1, overflowY: 'auto', padding: '6px 10px', fontFamily: 'monospace', fontSize: 12, color: '#c9d1d9' },
+  logLine: { lineHeight: 1.5, cursor: 'pointer', borderLeft: '2px solid transparent', paddingLeft: 6, marginLeft: -6 },
   groupHeader: { display: 'flex', alignItems: 'center', cursor: 'pointer', userSelect: 'none', padding: '1px 0', borderLeft: '2px solid #21262d', paddingLeft: 6 },
   groupBody: { paddingLeft: 14, borderLeft: '2px solid #21262d', marginLeft: 6 },
 };
