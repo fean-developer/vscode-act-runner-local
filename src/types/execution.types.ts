@@ -75,6 +75,7 @@ export interface ExecutionRecord {
   id: string;
   workflowPath: string;
   workflowName: string;
+  workflowRef?: string;
   jobId?: string;
   trigger: ExecutionTrigger;
   status: ExecutionStatus;
@@ -93,6 +94,7 @@ export interface ExecutionOptions {
   jobId?: string;
   eventType?: string;
   eventPayloadPath?: string;
+  workflowRef?: string;
   dryRun?: boolean;
   envFile?: string;
   varFile?: string;

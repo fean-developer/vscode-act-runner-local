@@ -1,5 +1,17 @@
 # Changelog
 
+## v2.10.16
+
+### Adicionado
+
+- A tela de Histórico agora segue o layout do GitHub Actions, com busca no topo, linhas de execução, branch visível e menu de ações `...`.
+- Adicionada paginação no Histórico com limite de 20 execuções por página.
+- O menu `...` de cada execução agora concentra as ações **Ver log**, **Reexecutar** e **Deletar**.
+
+### Corrigido
+
+- A branch/ref usada no `workflow_dispatch` agora é salva no registro de histórico e exibida na lista.
+
 ## v2.10.15
 
 ### Corrigido

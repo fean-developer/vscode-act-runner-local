@@ -182,6 +182,7 @@ export class ExecutionEngine {
         id: executionId,
         workflowPath: options.workflowPath,
         workflowName: workflow.name,
+        workflowRef: options.workflowRef,
         jobId: options.jobId,
         trigger: options.trigger ?? 'manual',
         status: finalStatus,

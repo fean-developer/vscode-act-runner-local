@@ -455,6 +455,7 @@ function openWebviewPanel(context: vscode.ExtensionContext, initialView: string,
           ...opts,
           workflowPath,
           workspaceRoot: workspaceRoot(),
+          workflowRef,
           ...(workflowInputs && { eventType: 'workflow_dispatch', eventPayloadPath }),
         }));
         break;
@@ -490,6 +491,7 @@ function openWebviewPanel(context: vscode.ExtensionContext, initialView: string,
               dryRun: record.dryRun,
               trigger: 'replay',
               workspaceRoot: root,
+              workflowRef: record.workflowRef,
             })
           );
         }
