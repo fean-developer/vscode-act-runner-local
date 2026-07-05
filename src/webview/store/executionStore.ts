@@ -5,6 +5,7 @@ import type { WorkflowGraph } from '../../types/workflow.types';
 
 export type NodeStatus = 'idle' | 'running' | 'success' | 'failed' | 'skipped';
 export type AppView = 'graph' | 'history' | 'env' | 'summary' | 'analytics';
+export type WorkflowInputValue = string | number | boolean;
 
 export interface GraphNode {
   id: string;
@@ -88,6 +89,7 @@ interface StoreState {
   workflows: WorkflowListItem[];
   selectedWorkflowPath: string | null;
   workflowRunDialogPath: string | null;
+  workflowInputValues: Record<string, Record<string, WorkflowInputValue>>;
   repository: RepositoryInfo | null;
   // Logs por execução (salvo ao final de cada execução, para exibir no histórico)
   historyLogs: Record<string, string[]>;
@@ -108,6 +110,8 @@ interface StoreState {
   setSelectedWorkflowPath: (workflowPath: string | null) => void;
   openWorkflowRunDialog: (workflowPath: string) => void;
   closeWorkflowRunDialog: () => void;
+  setWorkflowInputValue: (workflowPath: string, inputName: string, value: WorkflowInputValue) => void;
+  setWorkflowInputValues: (workflowPath: string, values: Record<string, WorkflowInputValue>) => void;
   setLogFilter: (filter: { jobId: string; stepLabel?: string; label: string } | null) => void;
 }
 
@@ -133,6 +137,7 @@ export const useExecutionStore = create<StoreState>((set) => ({
   workflows: [],
   selectedWorkflowPath: null,
   workflowRunDialogPath: null,
+  workflowInputValues: {},
   repository: null,
   historyLogs: {},
   logFilter: null,
@@ -156,6 +161,23 @@ export const useExecutionStore = create<StoreState>((set) => ({
   openWorkflowRunDialog: (workflowPath) => set({ workflowRunDialogPath: workflowPath }),
 
   closeWorkflowRunDialog: () => set({ workflowRunDialogPath: null }),
+
+  setWorkflowInputValue: (workflowPath, inputName, value) => set((s) => ({
+    workflowInputValues: {
+      ...s.workflowInputValues,
+      [workflowPath]: {
+        ...(s.workflowInputValues[workflowPath] ?? {}),
+        [inputName]: value,
+      },
+    },
+  })),
+
+  setWorkflowInputValues: (workflowPath, values) => set((s) => ({
+    workflowInputValues: {
+      ...s.workflowInputValues,
+      [workflowPath]: values,
+    },
+  })),
 
   setLogFilter: (filter) => set({ logFilter: filter }),
 

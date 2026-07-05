@@ -1,21 +1,31 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useExecutionStore, type WorkflowInputItem } from '../store/executionStore';
+import { useExecutionStore, type WorkflowInputItem, type WorkflowInputValue } from '../store/executionStore';
 
-type InputValue = string | number | boolean;
+type InputValue = WorkflowInputValue;
+type WebviewWindow = Window & { __vscode__?: { postMessage: (msg: unknown) => void } };
 
 export function WorkflowRunDialog() {
-  const { workflows, workflowRunDialogPath, closeWorkflowRunDialog } = useExecutionStore();
+  const {
+    workflows,
+    workflowRunDialogPath,
+    workflowInputValues,
+    closeWorkflowRunDialog,
+    setWorkflowInputValue,
+    setWorkflowInputValues,
+  } = useExecutionStore();
   const workflow = workflows.find((item) => item.filePath === workflowRunDialogPath);
 
   const initialValues = useMemo(() => {
     const values: Record<string, InputValue> = {};
+    const remembered = workflow ? workflowInputValues[workflow.filePath] : undefined;
     workflow?.inputs.forEach((input) => {
-      if (input.default !== undefined) values[input.name] = input.default;
+      if (remembered && Object.prototype.hasOwnProperty.call(remembered, input.name)) values[input.name] = remembered[input.name];
+      else if (input.default !== undefined) values[input.name] = input.default;
       else if (input.type === 'boolean') values[input.name] = false;
       else values[input.name] = '';
     });
     return values;
-  }, [workflow]);
+  }, [workflow, workflowInputValues]);
 
   const [values, setValues] = useState<Record<string, InputValue>>(initialValues);
 
@@ -25,13 +35,17 @@ export function WorkflowRunDialog() {
 
   if (!workflowRunDialogPath || !workflow) return null;
 
-  const setValue = (name: string, value: InputValue) => setValues((current) => ({ ...current, [name]: value }));
+  const setValue = (name: string, value: InputValue) => {
+    setValues((current) => ({ ...current, [name]: value }));
+    setWorkflowInputValue(workflow.filePath, name, value);
+  };
 
   const missingRequired = workflow.inputs.some((input) => input.required && String(values[input.name] ?? '').trim() === '');
 
   const run = () => {
     if (missingRequired) return;
-    window.__vscode__?.postMessage({
+    setWorkflowInputValues(workflow.filePath, values);
+    (window as WebviewWindow).__vscode__?.postMessage({
       type: 'command:run',
       payload: { workflowPath: workflow.filePath, workflowInputs: values },
     });

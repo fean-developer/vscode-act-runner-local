@@ -19,6 +19,8 @@ const STATUS: Record<NodeStatus, StatusConfig> = {
   skipped: { border: '#484f58', bg: '#161b22',  iconColor: '#8b949e', icon: '⏭',  pulse: false },
 };
 
+const JOB_CARD_BG = '#161b22';
+
 // ─── Animation injection ─────────────────────────────────────────────────────
 
 const KEYFRAMES = `
@@ -132,7 +134,7 @@ function InnerJobCard({
           display: 'flex', alignItems: 'center', gap: 8,
           padding: '7px 16px',
           cursor: hasSteps ? 'pointer' : 'default',
-          background: isRunning ? `${cfg.border}18` : undefined,
+          background: undefined,
           transition: 'background 0.15s ease',
         }}
       >
@@ -141,7 +143,7 @@ function InnerJobCard({
         </span>
         <span style={{
           fontWeight: 600, fontSize: 12,
-          color: job.status === 'idle' ? '#6e7681' : cfg.iconColor,
+          color: job.status === 'idle' ? '#6e7681' : '#c9d1d9',
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1,
         }}>
           {job.label}
@@ -199,10 +201,10 @@ function OuterJobCard({
     <div style={{
       border: `2px solid ${cfg.border}`,
       borderRadius: 12, overflow: 'hidden',
-      background: cfg.bg,
+      background: JOB_CARD_BG,
       width: 'fit-content', minWidth: 280,
       animation: isRunning ? 'actPulse 2s ease-in-out infinite' : undefined,
-      transition: 'border-color 0.3s ease, background 0.3s ease',
+      transition: 'border-color 0.3s ease',
     }}>
       {/* Header centralizado com chevron à esquerda */}
       <div
@@ -211,7 +213,7 @@ function OuterJobCard({
           display: 'flex', alignItems: 'center',
           padding: '11px 14px',
           borderBottom: isExpanded && hasChildren ? `1px solid ${cfg.border}55` : undefined,
-          background: isRunning ? `${cfg.border}18` : undefined,
+          background: JOB_CARD_BG,
           cursor: hasChildren ? 'pointer' : 'default',
           position: 'relative',
         }}
@@ -224,7 +226,7 @@ function OuterJobCard({
         <span style={{
           flex: 1, textAlign: 'center',
           fontWeight: 700, fontSize: 14,
-          color: outerJob.status === 'idle' ? '#8b949e' : cfg.iconColor,
+          color: outerJob.status === 'idle' ? '#8b949e' : '#e6edf3',
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
         }}>
           {outerJob.label}
@@ -548,7 +550,7 @@ export function WorkflowGraph({ showHeader = true }: WorkflowGraphProps) {
           <div style={styles.summary}>
             {runningCount > 0 && <span style={{ color: '#fb923c' }}>◉ {runningCount} em execução</span>}
             {successCount > 0 && <span style={{ color: '#3fb950' }}>✓ {successCount} concluído{successCount > 1 ? 's' : ''}</span>}
-            {failedCount  > 0 && <span style={{ color: '#f85149' }}>✕ {failedCount} falhou{failedCount > 1 ? 'ram' : ''}</span>}
+            {failedCount  > 0 && <span style={{ color: '#f85149' }}>✕ {failedCount} {failedCount > 1 ? 'falharam' : 'falhou'}</span>}
             <span style={{ color: '#6e7681', fontSize: 11 }}>
               {allJobs.length} job{allJobs.length !== 1 ? 's' : ''} · {steps.length} step{steps.length !== 1 ? 's' : ''}
             </span>

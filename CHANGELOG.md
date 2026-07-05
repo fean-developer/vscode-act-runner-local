@@ -1,5 +1,12 @@
 # Changelog
 
+## v2.10.11
+
+### Alterado
+
+- O modal **Run workflow** agora preserva os últimos valores informados por workflow ao fechar e abrir novamente.
+- Os cards de job no grafo agora mantêm fundo cinza, usando a cor de status apenas em bordas e indicadores visuais.
+
 ## v2.10.10
 
 ### Adicionado
