@@ -1,5 +1,42 @@
 # Changelog
 
+## v2.10.19
+
+### Alterado
+
+- Settings redesenhado com sidebar lateral estilo GitHub Settings:
+  - Sidebar esquerda com item **Actions** (expansível no futuro)
+  - 3 abas principais: **Secrets** | **Variables** | **Args do ACT**
+  - Aba **Variables** possui sub-abas pill: **.vars** e **.env** — ao selecionar carrega o arquivo correspondente
+  - Toda funcionalidade de CRUD preservada (adicionar, editar, deletar, salvar arquivo)
+
+## v2.10.18
+
+### Alterado
+
+- Tela de Settings completamente redesenhada para ser idêntica à página "Actions secrets and variables" do GitHub:
+  - Header com título e descrição explicativa igual ao GitHub
+  - Abas de navegação: **Secrets**, **Variables**, **.env**, **.actrc** com sublinhado laranja no estilo GitHub
+  - Seção com título e botão **"New repository secret/variable"** no canto direito
+  - Lista com ícone de cadeado (secrets), nome em azul, valor mascarado ou visível
+  - Botões de editar (✏️) e deletar (🗑️) inline em cada linha
+  - Formulário de adição/edição abre inline na mesma tela (sem modal)
+  - Estado vazio com mensagem e botão para adicionar
+  - Seletor de arquivo de origem agora é colapsável
+
+## v2.10.17
+
+### Alterado
+
+- A tela de variáveis e secrets (Settings) foi redesenhada com estilo GitHub, incluindo:
+  - Navegação em abas com ícones e estilo GitHub-like
+  - Tabela com grid layout mais limpo e espaçamento consistente
+  - Ações inline com ícones (remover/deletar)
+  - Estado vazio com mensagem descritiva
+  - Melhor feedback visual com transições suaves
+- Menu "Variáveis" foi renomeado para "⚙️ Settings" na barra de controle superior
+- Funcionalidade mantida: todas as operações (adicionar, editar, salvar, carregar arquivos) continuam funcionando
+
 ## v2.10.16
 
 ### Adicionado

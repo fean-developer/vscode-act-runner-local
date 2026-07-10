@@ -1,155 +1,669 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
-type Tab = 'env' | 'vars' | 'secrets' | 'actrc';
+// Top-level tabs
+type MainTab = 'secrets' | 'variables' | 'actrc';
+// Sub-tabs inside Variables
+type VarsSubTab = 'vars' | 'env';
+// Internal file tab sent to extension host
+type FileTab = 'secrets' | 'vars' | 'env' | 'actrc';
+// Sidebar sections (for future expansion)
+type SidebarSection = 'actions';
+type Mode = 'list' | 'add' | 'edit';
 
 interface EnvEntry { key: string; value: string }
+
+interface TabConfig {
+  label: string;
+  sectionTitle: string;
+  newBtnLabel: string;
+  nameLabel: string;
+  valueLabel: string | null;
+  fileKindLabel: string;
+  filePlaceholder: string;
+  isSecret: boolean;
+  description: string;
+}
+
+const FILE_TAB_CONFIGS: Record<FileTab, TabConfig> = {
+  secrets: {
+    label: 'Secrets',
+    sectionTitle: 'Repository secrets',
+    newBtnLabel: 'New repository secret',
+    nameLabel: 'Name',
+    valueLabel: 'Secret',
+    fileKindLabel: 'secrets',
+    filePlaceholder: '.secrets ou config/local.secrets',
+    isSecret: true,
+    description: 'Secrets are encrypted and are used for sensitive data. They are not passed to workflows triggered by a pull request from a fork.',
+  },
+  vars: {
+    label: '.vars',
+    sectionTitle: 'Repository variables',
+    newBtnLabel: 'New repository variable',
+    nameLabel: 'Name',
+    valueLabel: 'Value',
+    fileKindLabel: 'vars',
+    filePlaceholder: '.vars ou my.variables',
+    isSecret: false,
+    description: 'Variables loaded from a .vars file. Shown as plain text and used for non-sensitive configuration data.',
+  },
+  env: {
+    label: '.env',
+    sectionTitle: 'Environment variables',
+    newBtnLabel: 'New variable',
+    nameLabel: 'Name',
+    valueLabel: 'Value',
+    fileKindLabel: 'env',
+    filePlaceholder: '.env ou my.env',
+    isSecret: false,
+    description: 'Environment variables loaded from a .env file and passed to the act runner at execution time.',
+  },
+  actrc: {
+    label: 'Args do ACT',
+    sectionTitle: 'Act runner arguments',
+    newBtnLabel: 'New argument',
+    nameLabel: 'Argument',
+    valueLabel: null,
+    fileKindLabel: 'actrc',
+    filePlaceholder: '.actrc',
+    isSecret: false,
+    description: 'Configure act runner flags and platform mappings used when running GitHub Actions locally.',
+  },
+};
+
+const SIDEBAR_ITEMS: { key: SidebarSection; label: string; icon: string }[] = [
+  { key: 'actions', label: 'Actions', icon: '⚡' },
+];
+
 export function EnvEditor() {
-  const [tab, setTab] = useState<Tab>('env');
+  const [mainTab, setMainTab] = useState<MainTab>('secrets');
+  const [varsSubTab, setVarsSubTab] = useState<VarsSubTab>('vars');
+  const [sidebarSection, setSidebarSection] = useState<SidebarSection>('actions');
+
+  // Derived file tab based on navigation
+  const fileTab: FileTab =
+    mainTab === 'secrets' ? 'secrets' :
+    mainTab === 'actrc'   ? 'actrc' :
+    varsSubTab;
+
   const [rows, setRows] = useState<EnvEntry[]>([]);
   const [loading, setLoading] = useState(false);
-  const [visible, setVisible] = useState(false);
   const [filePath, setFilePath] = useState<string>('');
+  const [mode, setMode] = useState<Mode>('list');
+  const [editIndex, setEditIndex] = useState<number | null>(null);
+  const [formKey, setFormKey] = useState('');
+  const [formValue, setFormValue] = useState('');
+  const [showFilePath, setShowFilePath] = useState(false);
+  const nameInputRef = useRef<HTMLInputElement>(null);
 
-  // Solicitar dados do arquivo ao Extension Host ao montar e ao trocar de aba
   useEffect(() => {
     setLoading(true);
     setRows([]);
-    window.__vscode__?.postMessage({ type: 'command:loadEnv', payload: { tab } });
+    setMode('list');
+    setEditIndex(null);
+    window.__vscode__?.postMessage({ type: 'command:loadEnv', payload: { tab: fileTab } });
 
     const handler = (event: MessageEvent) => {
       const msg = event.data;
-      if (msg?.type === 'state:snapshot' && msg.payload?.envData?.tab === tab) {
+      if (msg?.type === 'state:snapshot' && msg.payload?.envData?.tab === fileTab) {
         const data = (msg.payload.envData.rows ?? []) as EnvEntry[];
-        setRows(data.length > 0 ? data : [{ key: '', value: '' }]);
+        setRows(data.filter((r: EnvEntry) => r.key.trim() !== ''));
         setFilePath((msg.payload.envData.filePath as string) ?? '');
         setLoading(false);
       }
     };
     window.addEventListener('message', handler);
     return () => window.removeEventListener('message', handler);
-  }, [tab]);
+  }, [fileTab]);
 
-  const save = () =>
-    window.__vscode__?.postMessage({ type: 'command:saveEnv', payload: { tab, rows, filePath } });
+  useEffect(() => {
+    if (mode === 'add' || mode === 'edit') {
+      setTimeout(() => nameInputRef.current?.focus(), 50);
+    }
+  }, [mode]);
+
+  const config = FILE_TAB_CONFIGS[fileTab];
+
+  const saveAll = (newRows: EnvEntry[]) => {
+    window.__vscode__?.postMessage({ type: 'command:saveEnv', payload: { tab: fileTab, rows: newRows, filePath } });
+  };
 
   const loadCurrentFile = () => {
     setLoading(true);
-    window.__vscode__?.postMessage({ type: 'command:loadEnv', payload: { tab, filePath } });
+    window.__vscode__?.postMessage({ type: 'command:loadEnv', payload: { tab: fileTab, filePath } });
   };
 
   const selectFile = () => {
     setLoading(true);
-    window.__vscode__?.postMessage({ type: 'command:selectEnvFile', payload: { tab } });
+    window.__vscode__?.postMessage({ type: 'command:selectEnvFile', payload: { tab: fileTab } });
   };
 
-  const addRow = () => setRows((r) => [...r, { key: '', value: '' }]);
+  const openAdd = () => { setFormKey(''); setFormValue(''); setEditIndex(null); setMode('add'); };
 
-  const updateRow = (i: number, field: keyof EnvEntry, val: string) =>
-    setRows((r) => r.map((row, idx) => idx === i ? { ...row, [field]: val } : row));
+  const openEdit = (i: number) => {
+    setFormKey(rows[i].key);
+    setFormValue(rows[i].value);
+    setEditIndex(i);
+    setMode('edit');
+  };
 
-  const removeRow = (i: number) => setRows((r) => r.filter((_, idx) => idx !== i));
+  const cancelForm = () => { setMode('list'); setEditIndex(null); setFormKey(''); setFormValue(''); };
 
-  const isSecret = tab === 'secrets';
-  const canEditFilePath = tab === 'env' || tab === 'vars' || tab === 'secrets';
+  const submitForm = () => {
+    if (!formKey.trim()) return;
+    let newRows: EnvEntry[];
+    if (mode === 'add') {
+      newRows = [...rows, { key: formKey.trim(), value: formValue }];
+    } else if (mode === 'edit' && editIndex !== null) {
+      newRows = rows.map((r, i) => i === editIndex ? { key: formKey.trim(), value: formValue } : r);
+    } else {
+      return;
+    }
+    setRows(newRows);
+    saveAll(newRows);
+    cancelForm();
+  };
+
+  const deleteRow = (i: number) => {
+    const newRows = rows.filter((_, idx) => idx !== i);
+    setRows(newRows);
+    saveAll(newRows);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') submitForm();
+    if (e.key === 'Escape') cancelForm();
+  };
 
   return (
-    <div style={styles.container}>
-      <div style={styles.tabs}>
-        {(['env', 'vars', 'secrets', 'actrc'] as Tab[]).map((t) => (
-          <button key={t} style={{ ...styles.tab, ...(tab === t ? styles.tabActive : {}) }} onClick={() => setTab(t)}>
-            {TAB_LABELS[t]}
-          </button>
-        ))}
-      </div>
-
-      {isSecret && (
-        <div style={styles.warning}>
-          ⚠️ Secrets nunca devem ser commitados. Verifique se .secrets está no .gitignore.
-          <button style={styles.toggleBtn} onClick={() => setVisible(!visible)}>
-            {visible ? '🙈 Ocultar' : '👁 Mostrar'} valores
-          </button>
-        </div>
-      )}
-
-      {canEditFilePath ? (
-        <label style={styles.filePathEditor}>
-          <span style={styles.filePathLabel}>Arquivo de {FILE_KIND_LABELS[tab]}</span>
-          <span style={styles.filePathRow}>
-            <input
-              style={styles.filePathInput}
-              value={filePath}
-              placeholder={FILE_PLACEHOLDERS[tab]}
-              onChange={(e) => setFilePath(e.target.value)}
-            />
-            <button style={styles.btnSecondary} onClick={selectFile}>Selecionar</button>
-            <button style={styles.btnSecondary} onClick={loadCurrentFile}>Carregar</button>
-          </span>
-        </label>
-      ) : filePath && (
-        <div style={styles.filePathHint}>
-          📄 {filePath}
-        </div>
-      )}
-
-      {loading ? (
-        <div style={styles.loadingMsg}>Carregando {TAB_LABELS[tab]}…</div>
-      ) : (
-        <div style={styles.table}>
-          <div style={styles.tableHead}>
-            <span style={styles.cell}>{tab === 'actrc' ? 'Argumento' : 'Chave'}</span>
-            {tab !== 'actrc' && <span style={styles.cell}>Valor</span>}
-            <span style={{ width: 32 }} />
-          </div>
-          {rows.map((row, i) => (
-            <div key={i} style={styles.tableRow}>
-              <input style={styles.input} value={row.key} placeholder={tab === 'actrc' ? '--flag ou -P runner=image' : 'KEY'} onChange={(e) => updateRow(i, 'key', e.target.value)} />
-              {tab !== 'actrc' && (
-                <input
-                  style={styles.input}
-                  type={isSecret && !visible ? 'password' : 'text'}
-                  value={row.value}
-                  placeholder="valor"
-                  onChange={(e) => updateRow(i, 'value', e.target.value)}
-                />
-              )}
-              <button style={styles.removeBtn} onClick={() => removeRow(i)}>✕</button>
-            </div>
+    <div style={s.root}>
+      {/* ─── Left sidebar (GitHub Settings style) ─── */}
+      <div style={s.sidebar}>
+        <div style={s.sidebarGroup}>
+          {SIDEBAR_ITEMS.map((item) => (
+            <button
+              key={item.key}
+              style={{
+                ...s.sidebarItem,
+                ...(sidebarSection === item.key ? s.sidebarItemActive : {}),
+              }}
+              onClick={() => setSidebarSection(item.key)}
+            >
+              <span style={s.sidebarIcon}>{item.icon}</span>
+              {item.label}
+            </button>
           ))}
         </div>
-      )}
+      </div>
 
-      <div style={styles.actions}>
-        <button style={styles.btnSecondary} onClick={addRow}>+ Adicionar</button>
-        <button style={styles.btnPrimary} onClick={save}>💾 Salvar {TAB_LABELS[tab]}</button>
+      {/* ─── Main content ─── */}
+      <div style={s.main}>
+        {/* Page header */}
+        <div style={s.pageHeader}>
+          <h2 style={s.pageTitle}>Actions secrets and variables</h2>
+          <p style={s.pageDesc}>
+            Secrets and variables allow you to manage reusable configuration data.{' '}
+            <strong style={{ color: '#c9d1d9' }}>Secrets are encrypted</strong> and are used for sensitive data.{' '}
+            Variables are shown as plain text and are used for{' '}
+            <strong style={{ color: '#c9d1d9' }}>non-sensitive data</strong>.{' '}
+            Anyone with collaborator access can use these secrets and variables for actions.
+            They are not passed to workflows triggered by a pull request from a fork.
+          </p>
+        </div>
+
+        {/* Top nav tabs: Secrets | Variables | Args do ACT */}
+        <div style={s.navTabs}>
+          {([
+            { key: 'secrets',   label: 'Secrets' },
+            { key: 'variables', label: 'Variables' },
+            { key: 'actrc',     label: 'Args do ACT' },
+          ] as { key: MainTab; label: string }[]).map((t) => (
+            <button
+              key={t.key}
+              style={{ ...s.navTab, ...(mainTab === t.key ? s.navTabActive : {}) }}
+              onClick={() => setMainTab(t.key)}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Content */}
+        <div style={s.content}>
+          {/* Variables sub-tabs (.vars | .env) */}
+          {mainTab === 'variables' && (
+            <div style={s.subTabs}>
+              {([
+                { key: 'vars', label: '.vars' },
+                { key: 'env',  label: '.env'  },
+              ] as { key: VarsSubTab; label: string }[]).map((t) => (
+                <button
+                  key={t.key}
+                  style={{ ...s.subTab, ...(varsSubTab === t.key ? s.subTabActive : {}) }}
+                  onClick={() => setVarsSubTab(t.key)}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Tab description */}
+          <p style={s.tabDesc}>{config.description}</p>
+
+          {/* File path (collapsible) */}
+          <div style={s.fileRow}>
+            <button style={s.fileToggle} onClick={() => setShowFilePath(v => !v)}>
+              📄 {filePath || config.filePlaceholder}
+              <span style={s.fileToggleArrow}>{showFilePath ? '▲' : '▼'}</span>
+            </button>
+            {showFilePath && (
+              <div style={s.fileControls}>
+                <input
+                  style={s.fileInput}
+                  value={filePath}
+                  placeholder={config.filePlaceholder}
+                  onChange={(e) => setFilePath(e.target.value)}
+                />
+                <button style={s.btnOutline} onClick={selectFile}>Selecionar</button>
+                <button style={s.btnOutline} onClick={loadCurrentFile}>Carregar</button>
+              </div>
+            )}
+          </div>
+
+          {/* Add / Edit form */}
+          {(mode === 'add' || mode === 'edit') && (
+            <div style={s.formBox}>
+              <div style={s.formHeader}>
+                <h3 style={s.formTitle}>
+                  {mode === 'add' ? config.newBtnLabel : `Update ${config.label.toLowerCase()}`}
+                </h3>
+              </div>
+              <div style={s.formBody}>
+                <div style={s.formField}>
+                  <label style={s.formLabel}>{config.nameLabel} *</label>
+                  <input
+                    ref={nameInputRef}
+                    style={s.formInput}
+                    value={formKey}
+                    placeholder={mainTab === 'actrc' ? '--flag ou -P ubuntu-latest=catthehacker/ubuntu:act-latest' : 'e.g. MY_VARIABLE'}
+                    onChange={(e) => setFormKey(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    spellCheck={false}
+                    autoCorrect="off"
+                  />
+                </div>
+                {config.valueLabel !== null && (
+                  <div style={s.formField}>
+                    <label style={s.formLabel}>{config.valueLabel}</label>
+                    <textarea
+                      style={s.formTextarea}
+                      value={formValue}
+                      placeholder={config.isSecret ? 'Enter secret value' : 'Enter value'}
+                      onChange={(e) => setFormValue(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Escape') cancelForm(); }}
+                      rows={3}
+                      spellCheck={false}
+                    />
+                    {config.isSecret && (
+                      <p style={s.formHint}>
+                        ⚠️ Secrets nunca devem ser commitados. Verifique se{' '}
+                        <code style={s.code}>.secrets</code> está no{' '}
+                        <code style={s.code}>.gitignore</code>.
+                      </p>
+                    )}
+                  </div>
+                )}
+                <div style={s.formActions}>
+                  <button
+                    style={{ ...s.btnGreen, ...(!formKey.trim() ? s.btnDisabled : {}) }}
+                    onClick={submitForm}
+                    disabled={!formKey.trim()}
+                  >
+                    {mode === 'add' ? `Add ${config.label.toLowerCase()}` : `Update ${config.label.toLowerCase()}`}
+                  </button>
+                  <button style={s.btnOutline} onClick={cancelForm}>Cancel</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* List section */}
+          {mode === 'list' && (
+            <div style={s.section}>
+              <div style={s.sectionHeader}>
+                <span style={s.sectionTitle}>{config.sectionTitle}</span>
+                <button style={s.btnGreen} onClick={openAdd}>{config.newBtnLabel}</button>
+              </div>
+
+              {loading ? (
+                <div style={s.emptyBox}><span style={s.emptyText}>Loading…</span></div>
+              ) : rows.length === 0 ? (
+                <div style={s.emptyBox}>
+                  <p style={s.emptyText}>There are no {config.label.toLowerCase()} for this repository.</p>
+                  <button style={s.btnGreenSm} onClick={openAdd}>{config.newBtnLabel}</button>
+                </div>
+              ) : (
+                <div style={s.table}>
+                  <div style={s.tableHead}>
+                    <div style={s.thName}>Name ↕</div>
+                    {config.valueLabel !== null && <div style={s.thValue}>Value</div>}
+                    <div style={s.thActions} />
+                  </div>
+                  {rows.map((row, i) => (
+                    <div
+                      key={i}
+                      style={{ ...s.tableRow, ...(i === rows.length - 1 ? s.tableRowLast : {}) }}
+                    >
+                      <div style={s.tdName}>
+                        {config.isSecret && <span style={s.lockIcon}>🔒</span>}
+                        <span style={s.itemName}>{row.key}</span>
+                      </div>
+                      {config.valueLabel !== null && (
+                        <div style={s.tdValue}>
+                          {config.isSecret
+                            ? <span style={s.maskedValue}>••••••••••••••••</span>
+                            : <span style={s.plainValue}>{row.value || <span style={s.noValue}>—</span>}</span>
+                          }
+                        </div>
+                      )}
+                      <div style={s.tdActions}>
+                        <button style={s.iconBtn} title="Edit" onClick={() => openEdit(i)}>✏️</button>
+                        <button style={{ ...s.iconBtn, ...s.iconBtnDanger }} title="Delete" onClick={() => deleteRow(i)}>🗑️</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
 }
 
-const TAB_LABELS: Record<Tab, string> = { env: '.env', vars: '.vars', secrets: '.secrets', actrc: '.actrc' };
-const FILE_KIND_LABELS: Record<Tab, string> = { env: 'env', vars: 'vars', secrets: 'secrets', actrc: 'actrc' };
-const FILE_PLACEHOLDERS: Record<Tab, string> = { env: '.env ou my.env', vars: '.vars ou my.variables', secrets: '.secrets ou config/local.secrets', actrc: '.actrc' };
+/* ─── Styles ─── */
+const s: Record<string, React.CSSProperties> = {
+  root: {
+    flex: 1,
+    overflow: 'hidden',
+    display: 'flex',
+    flexDirection: 'row',
+    background: '#0d1117',
+    color: '#c9d1d9',
+    height: '100%',
+  },
 
-const styles: Record<string, React.CSSProperties> = {
-  container: { flex: 1, overflow: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 12 },
-  tabs: { display: 'flex', gap: 4 },
-  tab: { padding: '4px 10px', border: '1px solid #30363d', borderRadius: 4, background: 'transparent', color: '#8b949e', cursor: 'pointer', fontSize: 12 },
-  tabActive: { background: '#21262d', color: '#e6edf3', borderColor: '#484f58' },
-  warning: { fontSize: 11, color: '#d29922', background: '#1c1500', border: '1px solid #3d2b00', borderRadius: 4, padding: '6px 10px', display: 'flex', alignItems: 'center', gap: 8 },
-  toggleBtn: { marginLeft: 'auto', padding: '2px 6px', border: '1px solid #484f58', borderRadius: 3, background: 'transparent', color: '#c9d1d9', cursor: 'pointer', fontSize: 11 },
-  loadingMsg: { color: '#6e7681', fontSize: 12, padding: '16px 4px' },
-  filePathHint: { fontSize: 10, color: '#484f58', fontFamily: 'monospace', padding: '2px 4px' },
-  filePathEditor: { display: 'flex', flexDirection: 'column', gap: 4 },
-  filePathRow: { display: 'flex', gap: 8 },
-  filePathLabel: { fontSize: 11, color: '#8b949e' },
-  filePathInput: { flex: 1, padding: '6px 8px', background: '#0d1117', border: '1px solid #30363d', borderRadius: 4, color: '#c9d1d9', fontSize: 12, fontFamily: 'monospace', outline: 'none' },
-  table: { border: '1px solid #21262d', borderRadius: 4, overflow: 'hidden' },
-  tableHead: { display: 'flex', background: '#0d1117', padding: '4px 8px', fontSize: 11, color: '#6e7681' },
-  tableRow: { display: 'flex', borderTop: '1px solid #21262d' },
-  cell: { flex: 1, padding: '0 4px' },
-  input: { flex: 1, padding: '5px 8px', background: 'transparent', border: 'none', borderRight: '1px solid #21262d', color: '#c9d1d9', fontSize: 12, fontFamily: 'monospace', outline: 'none' },
-  removeBtn: { width: 32, border: 'none', background: 'transparent', color: '#6e7681', cursor: 'pointer', fontSize: 12 },
-  actions: { display: 'flex', gap: 8 },
-  btnPrimary: { padding: '6px 14px', background: '#238636', border: 'none', borderRadius: 4, color: '#fff', cursor: 'pointer', fontSize: 12 },
-  btnSecondary: { padding: '4px 10px', background: 'transparent', border: '1px solid #30363d', borderRadius: 4, color: '#8b949e', cursor: 'pointer', fontSize: 11 },
+  /* ── Sidebar ── */
+  sidebar: {
+    width: 200,
+    flexShrink: 0,
+    borderRight: '1px solid #21262d',
+    padding: '16px 0',
+    background: '#0d1117',
+    overflowY: 'auto',
+  },
+  sidebarGroup: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 2,
+    padding: '0 8px',
+  },
+  sidebarItem: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    padding: '6px 12px',
+    background: 'transparent',
+    border: 'none',
+    borderRadius: 6,
+    color: '#c9d1d9',
+    cursor: 'pointer',
+    fontSize: 13,
+    fontWeight: 400,
+    textAlign: 'left' as const,
+    width: '100%',
+  },
+  sidebarItemActive: {
+    background: '#1f6feb',
+    color: '#ffffff',
+    fontWeight: 600,
+  },
+  sidebarIcon: {
+    fontSize: 14,
+    flexShrink: 0,
+  },
+
+  /* ── Main ── */
+  main: {
+    flex: 1,
+    overflow: 'auto',
+    display: 'flex',
+    flexDirection: 'column',
+  },
+  pageHeader: {
+    padding: '20px 24px 16px 24px',
+    borderBottom: '1px solid #21262d',
+  },
+  pageTitle: {
+    fontSize: 20,
+    fontWeight: 600,
+    color: '#e6edf3',
+    margin: '0 0 8px 0',
+  },
+  pageDesc: {
+    fontSize: 12,
+    color: '#8b949e',
+    margin: 0,
+    lineHeight: 1.65,
+    maxWidth: 750,
+  },
+
+  /* ── Nav tabs ── */
+  navTabs: {
+    display: 'flex',
+    padding: '0 24px',
+    borderBottom: '1px solid #21262d',
+    background: '#0d1117',
+  },
+  navTab: {
+    padding: '10px 16px',
+    background: 'transparent',
+    border: 'none',
+    borderBottom: '2px solid transparent',
+    color: '#8b949e',
+    cursor: 'pointer',
+    fontSize: 13,
+    fontWeight: 500,
+    marginBottom: -1,
+  },
+  navTabActive: {
+    color: '#e6edf3',
+    borderBottomColor: '#f78166',
+  },
+
+  /* ── Sub-tabs (Variables) ── */
+  subTabs: {
+    display: 'flex',
+    gap: 4,
+    marginBottom: 4,
+  },
+  subTab: {
+    padding: '5px 14px',
+    background: '#161b22',
+    border: '1px solid #30363d',
+    borderRadius: 20,
+    color: '#8b949e',
+    cursor: 'pointer',
+    fontSize: 12,
+    fontWeight: 500,
+  },
+  subTabActive: {
+    background: '#1f6feb22',
+    border: '1px solid #1f6feb',
+    color: '#58a6ff',
+    fontWeight: 600,
+  },
+
+  /* ── Content ── */
+  content: {
+    padding: '20px 24px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 16,
+    flex: 1,
+  },
+  tabDesc: {
+    fontSize: 12,
+    color: '#8b949e',
+    margin: 0,
+    lineHeight: 1.6,
+  },
+
+  /* ── File path ── */
+  fileRow: { display: 'flex', flexDirection: 'column', gap: 8 },
+  fileToggle: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 6,
+    background: 'transparent',
+    border: '1px solid #30363d',
+    borderRadius: 6,
+    color: '#8b949e',
+    cursor: 'pointer',
+    fontSize: 11,
+    padding: '4px 10px',
+    fontFamily: 'monospace',
+  },
+  fileToggleArrow: { fontSize: 9, marginLeft: 4 },
+  fileControls: { display: 'flex', gap: 8, alignItems: 'center' },
+  fileInput: {
+    flex: 1,
+    padding: '6px 10px',
+    background: '#161b22',
+    border: '1px solid #30363d',
+    borderRadius: 6,
+    color: '#c9d1d9',
+    fontSize: 12,
+    fontFamily: 'monospace',
+    outline: 'none',
+  },
+
+  /* ── Form ── */
+  formBox: { border: '1px solid #30363d', borderRadius: 8, overflow: 'hidden', background: '#161b22' },
+  formHeader: { padding: '12px 16px', borderBottom: '1px solid #21262d', background: '#21262d' },
+  formTitle: { margin: 0, fontSize: 14, fontWeight: 600, color: '#e6edf3' },
+  formBody: { padding: '16px', display: 'flex', flexDirection: 'column', gap: 14 },
+  formField: { display: 'flex', flexDirection: 'column', gap: 6 },
+  formLabel: { fontSize: 12, fontWeight: 600, color: '#c9d1d9' },
+  formInput: {
+    padding: '8px 12px',
+    background: '#0d1117',
+    border: '1px solid #30363d',
+    borderRadius: 6,
+    color: '#c9d1d9',
+    fontSize: 13,
+    fontFamily: 'monospace',
+    outline: 'none',
+  },
+  formTextarea: {
+    padding: '8px 12px',
+    background: '#0d1117',
+    border: '1px solid #30363d',
+    borderRadius: 6,
+    color: '#c9d1d9',
+    fontSize: 13,
+    fontFamily: 'monospace',
+    outline: 'none',
+    resize: 'vertical',
+    lineHeight: 1.5,
+  },
+  formHint: {
+    margin: 0,
+    fontSize: 11,
+    color: '#d29922',
+    background: '#1c1500',
+    border: '1px solid #3d2b00',
+    borderRadius: 4,
+    padding: '6px 10px',
+  },
+  code: { fontFamily: 'monospace', background: '#21262d', padding: '1px 4px', borderRadius: 3, fontSize: 11 },
+  formActions: { display: 'flex', gap: 8, paddingTop: 4 },
+
+  /* ── Section / Table ── */
+  section: { border: '1px solid #30363d', borderRadius: 8, overflow: 'hidden' },
+  sectionHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: '12px 16px',
+    background: '#161b22',
+    borderBottom: '1px solid #21262d',
+  },
+  sectionTitle: { fontSize: 14, fontWeight: 600, color: '#e6edf3' },
+  table: { display: 'flex', flexDirection: 'column', background: '#0d1117' },
+  tableHead: {
+    display: 'grid',
+    gridTemplateColumns: '1fr 1fr 88px',
+    padding: '8px 16px',
+    background: '#161b22',
+    borderBottom: '1px solid #21262d',
+    gap: 12,
+  },
+  thName: { fontSize: 11, fontWeight: 600, color: '#6e7681', textTransform: 'uppercase' as const, letterSpacing: '0.04em' },
+  thValue: { fontSize: 11, fontWeight: 600, color: '#6e7681', textTransform: 'uppercase' as const, letterSpacing: '0.04em' },
+  thActions: { width: 88 },
+  tableRow: {
+    display: 'grid',
+    gridTemplateColumns: '1fr 1fr 88px',
+    padding: '12px 16px',
+    borderBottom: '1px solid #21262d',
+    gap: 12,
+    alignItems: 'center',
+  },
+  tableRowLast: { borderBottom: 'none' },
+  tdName: { display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 },
+  lockIcon: { fontSize: 13, flexShrink: 0 },
+  itemName: {
+    fontSize: 13, fontWeight: 600, color: '#58a6ff', fontFamily: 'monospace',
+    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const,
+  },
+  tdValue: { minWidth: 0, overflow: 'hidden' },
+  maskedValue: { fontSize: 12, color: '#6e7681', letterSpacing: 2 },
+  plainValue: {
+    fontSize: 12, color: '#8b949e', fontFamily: 'monospace',
+    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block',
+  },
+  noValue: { color: '#484f58' },
+  tdActions: { display: 'flex', gap: 4, justifyContent: 'flex-end', alignItems: 'center' },
+  emptyBox: {
+    display: 'flex', flexDirection: 'column', alignItems: 'center',
+    justifyContent: 'center', gap: 12, padding: '40px 20px', background: '#0d1117',
+  },
+  emptyText: { fontSize: 13, color: '#6e7681', margin: 0, textAlign: 'center' as const },
+
+  /* ── Buttons ── */
+  btnGreen: {
+    padding: '6px 14px', background: '#238636',
+    border: '1px solid rgba(240,246,252,0.1)', borderRadius: 6,
+    color: '#ffffff', cursor: 'pointer', fontSize: 12, fontWeight: 500,
+  },
+  btnGreenSm: {
+    padding: '5px 12px', background: '#238636',
+    border: '1px solid rgba(240,246,252,0.1)', borderRadius: 6,
+    color: '#ffffff', cursor: 'pointer', fontSize: 12, fontWeight: 500,
+  },
+  btnDisabled: { opacity: 0.5, cursor: 'not-allowed' },
+  btnOutline: {
+    padding: '6px 14px', background: 'transparent',
+    border: '1px solid #30363d', borderRadius: 6,
+    color: '#c9d1d9', cursor: 'pointer', fontSize: 12, fontWeight: 500,
+  },
+  iconBtn: {
+    padding: '4px 8px', background: 'transparent',
+    border: '1px solid #30363d', borderRadius: 6,
+    color: '#8b949e', cursor: 'pointer', fontSize: 13, lineHeight: '1',
+  },
+  iconBtnDanger: { color: '#f85149' },
 };

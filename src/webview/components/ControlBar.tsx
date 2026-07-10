@@ -68,7 +68,7 @@ export function ControlBar() {
 }
 
 const VIEW_LABELS: Record<string, string> = {
-  graph: '🗺 Grafo', history: '📜 Histórico', analytics: '📊 Analytics', env: '🔐 Variáveis',
+  graph: '🗺 Grafo', history: '📜 Histórico', analytics: '📊 Analytics', env: '⚙️ Settings',
 };
 
 const styles: Record<string, React.CSSProperties> = {
