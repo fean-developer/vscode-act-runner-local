@@ -1,5 +1,15 @@
 # Changelog
 
+## v2.10.20
+
+### Segurança
+
+- Corrigidas 3 vulnerabilidades identificadas pelo Dependabot via `npm audit fix`:
+  - **HIGH** `ws` ≤8.20.1 — Memory exhaustion DoS from tiny fragments (GHSA-96hv-2xvq-fx4p)
+  - **MODERATE** `js-yaml` ≤4.1.1 — Quadratic-complexity DoS via repeated aliases (GHSA-h67p-54hq-rp68)
+  - **LOW** `@babel/core` ≤7.29.0 — Arbitrary File Read via sourceMappingURL (GHSA-4x5r-pxfx-6jf8)
+- 19 pacotes atualizados; todos os 39 testes continuam passando
+
 ## v2.10.19
 
 ### Alterado
