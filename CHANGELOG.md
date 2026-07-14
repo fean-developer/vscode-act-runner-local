@@ -1,5 +1,17 @@
 # Changelog
 
+## v2.10.25
+
+### Corrigido
+
+- Durante uma execução em andamento, clicar em uma linha do Histórico não substitui mais o grafo ao vivo por um snapshot antigo.
+
+## v2.10.24
+
+### Corrigido
+
+- A exclusão de uma execução no Histórico agora remove também estados locais associados ao registro selecionado, evitando que snapshots/logs órfãos mantenham a execução disponível após deletar.
+
 ## v2.10.23
 
 ### Removido

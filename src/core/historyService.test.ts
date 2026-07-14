@@ -67,6 +67,18 @@ describe('HistoryService', () => {
     expect(results[0].id).toBe('exec-002');
   });
 
+  it('deve deletar um registro por ID', async () => {
+    const failed: ExecutionRecord = { ...sample, id: 'exec-002', status: 'failed' };
+    (mockContext.globalState.get as jest.Mock).mockReturnValue([sample, failed]);
+
+    await service.deleteById('exec-001');
+
+    expect(mockContext.globalState.update).toHaveBeenCalledWith(
+      'actRunner.executionHistory',
+      [expect.objectContaining({ id: 'exec-002' })]
+    );
+  });
+
   it('deve limpar o histórico', async () => {
     await service.clear();
     expect(mockContext.globalState.update).toHaveBeenCalledWith(

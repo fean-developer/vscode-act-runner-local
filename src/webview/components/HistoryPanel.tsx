@@ -8,6 +8,7 @@ export function HistoryPanel() {
   const history = useExecutionStore((s) => s.history);
   const historyLogs = useExecutionStore((s) => s.historyLogs);
   const graphSnapshotsByExecutionId = useExecutionStore((s) => s.graphSnapshotsByExecutionId);
+  const isWorkflowRunning = useExecutionStore((s) => s.execution.status === 'running');
   const restoreGraphForExecution = useExecutionStore((s) => s.restoreGraphForExecution);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [expandedArtifactsId, setExpandedArtifactsId] = useState<string | null>(null);
@@ -24,6 +25,7 @@ export function HistoryPanel() {
     window.__vscode__?.postMessage({ type: 'command:deleteHistory', payload: { executionId: id } });
 
   const restoreExecution = (id: string) => {
+    if (isWorkflowRunning) return;
     window.__vscode__?.postMessage({ type: 'command:restoreHistoryRepository', payload: { executionId: id } });
     restoreGraphForExecution(id);
   };
@@ -88,6 +90,7 @@ export function HistoryPanel() {
         const logs = historyLogs[r.id];
         const hasLogs = logs && logs.length > 0;
         const canRestoreGraph = !!graphSnapshotsByExecutionId[r.id];
+        const canOpenGraph = canRestoreGraph && !isWorkflowRunning;
         // fallback: logSummary do ExecutionRecord (execuções de sessões anteriores)
         const logFallback = !hasLogs && r.logSummary ? r.logSummary : null;
         const canExpand = hasLogs || !!logFallback;
@@ -100,9 +103,9 @@ export function HistoryPanel() {
         return (
           <div key={r.id}>
             <div
-              style={{ ...styles.row, ...(canRestoreGraph ? styles.clickableRow : {}) }}
-              onClick={canRestoreGraph ? () => restoreExecution(r.id) : undefined}
-              title={canRestoreGraph ? 'Abrir grafo desta execução' : 'Grafo detalhado disponível para execuções feitas nesta sessão'}
+              style={{ ...styles.row, ...(canOpenGraph ? styles.clickableRow : {}) }}
+              onClick={canOpenGraph ? () => restoreExecution(r.id) : undefined}
+              title={historyRowTitle(canRestoreGraph, isWorkflowRunning)}
             >
               <span style={{ color: statusColor(r.status), fontSize: 14 }}>{statusIcon(r.status)}</span>
               <div style={styles.runMain}>
@@ -253,6 +256,13 @@ function splitLogFallback(logFallback: string | null): string[] {
 function setHistoryLineRef(refs: Map<number, HTMLDivElement>, index: number, element: HTMLDivElement | null): void {
   if (element) refs.set(index, element);
   else refs.delete(index);
+}
+
+function historyRowTitle(canRestoreGraph: boolean, isWorkflowRunning: boolean): string {
+  if (isWorkflowRunning) return 'Execução em andamento: o grafo ao vivo permanece protegido.';
+  return canRestoreGraph
+    ? 'Abrir grafo desta execução'
+    : 'Grafo detalhado disponível para execuções feitas nesta sessão';
 }
 
 function highlightLogText(line: string, normalizedQuery: string): React.ReactNode {

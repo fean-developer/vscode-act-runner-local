@@ -171,13 +171,27 @@ export const useExecutionStore = create<StoreState>((set, get) => ({
 
   setView: (view) => set({ currentView: view }),
 
-  setHistory: (records) => set((s) => ({
-    history: records,
-    graphSnapshotsByExecutionId: {
-      ...s.graphSnapshotsByExecutionId,
-      ...buildExecutionSnapshotIndex(records),
-    },
-  })),
+  setHistory: (records) => set((s) => {
+    const activeExecutionIds = new Set(records.map((record) => record.id));
+    const persistedSnapshots = buildExecutionSnapshotIndex(records);
+    const liveSnapshots = Object.fromEntries(
+      Object.entries(s.graphSnapshotsByExecutionId).filter(([executionId]) => (
+        activeExecutionIds.has(executionId) && !persistedSnapshots[executionId]
+      ))
+    );
+    const historyLogs = Object.fromEntries(
+      Object.entries(s.historyLogs).filter(([executionId]) => activeExecutionIds.has(executionId))
+    );
+
+    return {
+      history: records,
+      historyLogs,
+      graphSnapshotsByExecutionId: {
+        ...liveSnapshots,
+        ...persistedSnapshots,
+      },
+    };
+  }),
 
   setWorkflows: (records) => set((s) => ({
     workflows: records,
@@ -234,6 +248,7 @@ export const useExecutionStore = create<StoreState>((set, get) => ({
   }),
 
   restoreGraphForExecution: (executionId) => set((s) => {
+    if (s.execution.status === 'running') return {};
     const record = s.history.find((item) => item.id === executionId);
     const snapshot = record?.graphHistory?.final ?? s.graphSnapshotsByExecutionId[executionId];
     if (!snapshot) return {};
