@@ -55,4 +55,39 @@ describe('EnvManager', () => {
 
     expect(manager.getSelectedSecretsFilePath(tempRoot)).toBe(path.join(tempRoot, 'config', 'local.secrets'));
   });
+
+  it('lê secret multilinha entre aspas sem criar entradas para o conteúdo', () => {
+    const secretsPath = path.join(tempRoot, '.secrets');
+    fs.writeFileSync(secretsPath, [
+      'GH_APP_PRIVATE_KEY="',
+      '-----BEGIN RSA PRIVATE KEY-----',
+      'MIIEowIBAAKCAQEArQxr20etHi3d6sYULzI3eLUNFRERglfkznrV2DalQrCSx2Sm',
+      '-----END RSA PRIVATE KEY-----',
+      '"',
+      'TOKEN=local-secret',
+    ].join('\n'));
+
+    const result = manager.read(secretsPath);
+
+    expect(result.get('GH_APP_PRIVATE_KEY')).toBe([
+      '-----BEGIN RSA PRIVATE KEY-----',
+      'MIIEowIBAAKCAQEArQxr20etHi3d6sYULzI3eLUNFRERglfkznrV2DalQrCSx2Sm',
+      '-----END RSA PRIVATE KEY-----',
+    ].join('\n'));
+    expect(result.get('TOKEN')).toBe('local-secret');
+    expect(result.has('MIIEowIBAAKCAQEArQxr20etHi3d6sYULzI3eLUNFRERglfkznrV2DalQrCSx2Sm')).toBe(false);
+  });
+
+  it('salva valores multilinha em formato recarregável', () => {
+    const secretsPath = path.join(tempRoot, '.secrets');
+    const value = [
+      '-----BEGIN RSA PRIVATE KEY-----',
+      'line with "quote"',
+      '-----END RSA PRIVATE KEY-----',
+    ].join('\n');
+
+    manager.write(secretsPath, new Map([['GH_APP_PRIVATE_KEY', value]]));
+
+    expect(manager.read(secretsPath).get('GH_APP_PRIVATE_KEY')).toBe(value);
+  });
 });

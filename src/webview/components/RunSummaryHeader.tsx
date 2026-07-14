@@ -2,11 +2,12 @@ import React from 'react';
 import { useExecutionStore, type NodeStatus } from '../store/executionStore';
 
 export function RunSummaryHeader() {
-  const { execution, nodes } = useExecutionStore();
+  const { execution, nodes, history } = useExecutionStore();
   const jobs = nodes.filter((node) => node.type === 'job');
   const totalJobs = jobs.length;
   const successfulJobs = jobs.filter((job) => job.status === 'success').length;
   const status = toNodeStatus(execution.status);
+  const artifactCount = history.find((record) => record.id === execution.executionId)?.artifacts?.length ?? 0;
 
   return (
     <section style={styles.card}>
@@ -21,7 +22,7 @@ export function RunSummaryHeader() {
       <Metric label="Status" value={formatStatus(execution.status)} />
       <Metric label="Total duration" value={formatDuration(execution)} />
       <Metric label="Jobs" value={`${successfulJobs}/${totalJobs || 0}`} />
-      <Metric label="Artifacts" value="-" />
+      <Metric label="Artifacts" value={artifactCount > 0 ? String(artifactCount) : '-'} />
     </section>
   );
 }

@@ -71,6 +71,14 @@ export interface ExecutionGraphHistory {
   timeline: ExecutionGraphTimelineEntry[];
 }
 
+export interface ExecutionArtifact {
+  name: string;
+  path: string;
+  size: number;
+  fileCount: number;
+  createdAt?: string;
+}
+
 export interface ExecutionRecord {
   id: string;
   workflowPath: string;
@@ -87,6 +95,7 @@ export interface ExecutionRecord {
   jobs: JobResult[];
   logSummary: string;
   graphHistory?: ExecutionGraphHistory;
+  artifacts?: ExecutionArtifact[];
 }
 
 export interface ExecutionOptions {

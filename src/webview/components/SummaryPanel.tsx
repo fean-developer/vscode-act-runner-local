@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { useExecutionStore, type NodeStatus } from '../store/executionStore';
+import type { ExecutionArtifact } from '../../types/execution.types';
 import { WorkflowGraph } from './WorkflowGraph';
 import { RunSummaryHeader } from './RunSummaryHeader';
 
@@ -188,10 +189,21 @@ function markdownToHtml(md: string): string {
  * Renderiza um estado vazio quando ainda não há conteúdo — totalmente aditivo.
  */
 export function SummaryPanel() {
-  const { summaryContent, execution, nodes } = useExecutionStore();
+  const { summaryContent, execution, nodes, history } = useExecutionStore();
   const jobs = nodes.filter((node) => node.type === 'job');
   const workflowFile = execution.workflowPath?.split('/').pop() ?? 'workflow.yml';
   const summaryTitle = getSummaryTitle(summaryContent) ?? 'Job summary';
+  const artifacts = history.find((record) => record.id === execution.executionId)?.artifacts ?? [];
+
+  const openArtifact = (artifactPath: string) => {
+    if (!execution.executionId) return;
+    window.__vscode__?.postMessage({ type: 'command:openArtifact', payload: { executionId: execution.executionId, artifactPath } });
+  };
+
+  const downloadArtifact = (artifactPath: string) => {
+    if (!execution.executionId) return;
+    window.__vscode__?.postMessage({ type: 'command:downloadArtifact', payload: { executionId: execution.executionId, artifactPath } });
+  };
 
   // Memoiza a conversão Markdown → HTML para evitar re-renders desnecessários
   const htmlContent = useMemo(() => {
@@ -232,6 +244,14 @@ export function SummaryPanel() {
           </div>
         </section>
 
+        {artifacts.length > 0 && (
+          <ArtifactsSummarySection
+            artifacts={artifacts}
+            onOpen={openArtifact}
+            onDownload={downloadArtifact}
+          />
+        )}
+
         <section style={styles.summaryCard}>
           <header style={styles.summaryHeader}>
             <span>{summaryTitle}</span>
@@ -251,6 +271,40 @@ export function SummaryPanel() {
       </main>
       <style>{summaryStyles}</style>
     </div>
+  );
+}
+
+function ArtifactsSummarySection({ artifacts, onOpen, onDownload }: {
+  artifacts: ExecutionArtifact[];
+  onOpen: (artifactPath: string) => void;
+  onDownload: (artifactPath: string) => void;
+}) {
+  return (
+    <section style={styles.artifactsCard}>
+      <header style={styles.artifactsHeader}>
+        <div>
+          <div style={styles.artifactsTitle}>Artifacts</div>
+          <div style={styles.artifactsSubtitle}>Produced during runtime</div>
+        </div>
+      </header>
+      <div style={styles.artifactsTableHeader}>
+        <span>Name</span>
+        <span>Size</span>
+        <span />
+      </div>
+      {artifacts.map((artifact) => (
+        <div key={artifact.path} style={styles.artifactRow}>
+          <button type="button" style={styles.artifactNameButton} onClick={() => onOpen(artifact.path)} title="Mostrar artefato">
+            <span style={styles.artifactBoxIcon}>◇</span>
+            <span style={styles.artifactName}>{artifact.name}</span>
+          </button>
+          <span style={styles.artifactSize}>{formatBytes(artifact.size)}</span>
+          <button type="button" style={styles.artifactDownloadButton} onClick={() => onDownload(artifact.path)} title="Baixar artefato">
+            Baixar
+          </button>
+        </div>
+      ))}
+    </section>
   );
 }
 
@@ -276,6 +330,12 @@ function getSummaryTitle(markdown: string): string | null {
   const firstHeading = markdown.split('\n').find((line) => /^#{1,6}\s+/.test(line.trim()));
   if (!firstHeading) return null;
   return firstHeading.replace(/^#{1,6}\s+/, '').trim().replace(/[🚀📋✅❌]/g, '').trim() || null;
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 // ─── Inline styles (container) ───────────────────────────────────────────────
@@ -381,6 +441,84 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 6,
     background: '#161b22',
     overflow: 'hidden',
+  },
+  artifactsCard: {
+    border: '1px solid #30363d',
+    borderRadius: 6,
+    background: '#161b22',
+    overflow: 'hidden',
+  },
+  artifactsHeader: {
+    padding: '18px 24px 16px',
+  },
+  artifactsTitle: {
+    color: '#e6edf3',
+    fontSize: 16,
+    fontWeight: 700,
+  },
+  artifactsSubtitle: {
+    color: '#8b949e',
+    fontSize: 13,
+    marginTop: 2,
+  },
+  artifactsTableHeader: {
+    display: 'grid',
+    gridTemplateColumns: 'minmax(0, 1fr) 160px 100px',
+    gap: 12,
+    padding: '8px 24px 12px',
+    borderBottom: '1px solid #30363d',
+    color: '#8b949e',
+    fontSize: 13,
+    fontWeight: 600,
+  },
+  artifactRow: {
+    display: 'grid',
+    gridTemplateColumns: 'minmax(0, 1fr) 160px 100px',
+    gap: 12,
+    alignItems: 'center',
+    padding: '14px 24px',
+    borderBottom: '1px solid #21262d',
+  },
+  artifactNameButton: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 10,
+    minWidth: 0,
+    padding: 0,
+    border: 0,
+    background: 'transparent',
+    color: '#e6edf3',
+    cursor: 'pointer',
+    fontSize: 14,
+    fontWeight: 700,
+    textAlign: 'left',
+  },
+  artifactBoxIcon: {
+    color: '#c9d1d9',
+    fontSize: 20,
+    lineHeight: 1,
+    flexShrink: 0,
+  },
+  artifactName: {
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  artifactSize: {
+    color: '#c9d1d9',
+    fontSize: 13,
+    fontWeight: 600,
+  },
+  artifactDownloadButton: {
+    justifySelf: 'end',
+    padding: '5px 10px',
+    border: '1px solid #30363d',
+    borderRadius: 6,
+    background: '#21262d',
+    color: '#c9d1d9',
+    cursor: 'pointer',
+    fontSize: 12,
+    fontWeight: 600,
   },
   summaryHeader: {
     display: 'flex',
