@@ -1,5 +1,11 @@
 # Changelog
 
+## v2.10.26
+
+### Corrigido
+
+- Removido o item residual "Ver artefatos" do menu de ações do Histórico.
+
 ## v2.10.25
 
 ### Corrigido

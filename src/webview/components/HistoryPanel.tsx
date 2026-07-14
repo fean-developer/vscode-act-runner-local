@@ -1,6 +1,5 @@
 import React, { useMemo, useState } from 'react';
 import { useExecutionStore } from '../store/executionStore';
-import type { ExecutionArtifact } from '../../types/execution.types';
 
 const PAGE_SIZE = 20;
 
@@ -11,7 +10,6 @@ export function HistoryPanel() {
   const isWorkflowRunning = useExecutionStore((s) => s.execution.status === 'running');
   const restoreGraphForExecution = useExecutionStore((s) => s.restoreGraphForExecution);
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [expandedArtifactsId, setExpandedArtifactsId] = useState<string | null>(null);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [logSearchQuery, setLogSearchQuery] = useState('');
@@ -29,12 +27,6 @@ export function HistoryPanel() {
     window.__vscode__?.postMessage({ type: 'command:restoreHistoryRepository', payload: { executionId: id } });
     restoreGraphForExecution(id);
   };
-
-  const openArtifact = (executionId: string, artifactPath: string) =>
-    window.__vscode__?.postMessage({ type: 'command:openArtifact', payload: { executionId, artifactPath } });
-
-  const downloadArtifact = (executionId: string, artifactPath: string) =>
-    window.__vscode__?.postMessage({ type: 'command:downloadArtifact', payload: { executionId, artifactPath } });
 
   const filteredHistory = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -96,9 +88,6 @@ export function HistoryPanel() {
         const canExpand = hasLogs || !!logFallback;
         const branch = formatBranch(r.workflowRef);
         const menuOpen = openMenuId === r.id;
-        const artifacts = r.artifacts ?? [];
-        const hasArtifacts = artifacts.length > 0;
-        const artifactsExpanded = expandedArtifactsId === r.id;
 
         return (
           <div key={r.id}>
@@ -138,17 +127,6 @@ export function HistoryPanel() {
                       }}
                     >
                       {isExpanded ? 'Ocultar log' : 'Ver log'}
-                    </button>
-                    <button
-                      type="button"
-                      style={{ ...styles.menuItem, ...(!hasArtifacts ? styles.menuItemDisabled : {}) }}
-                      disabled={!hasArtifacts}
-                      onClick={() => {
-                        setExpandedArtifactsId(artifactsExpanded ? null : r.id);
-                        setOpenMenuId(null);
-                      }}
-                    >
-                      {artifactsExpanded ? 'Ocultar artefatos' : `Ver artefatos (${artifacts.length})`}
                     </button>
                     <button type="button" style={styles.menuItem} onClick={() => { rerun(r.id); setOpenMenuId(null); }}>Reexecutar</button>
                     <button type="button" style={{ ...styles.menuItem, ...styles.dangerItem }} onClick={() => { deleteEntry(r.id); setOpenMenuId(null); }}>Deletar</button>
@@ -302,12 +280,6 @@ function statusColor(s: string) {
 }
 function statusIcon(s: string) {
   return ({ success: '✓', failed: '✗', cancelled: '⊘', running: '◉' } as Record<string, string>)[s] ?? '○';
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 const styles: Record<string, React.CSSProperties> = {
