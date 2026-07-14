@@ -1,6 +1,5 @@
 import { randomUUID } from 'crypto';
 import * as fs from 'fs';
-import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { actRunner } from './actRunner';
@@ -9,7 +8,7 @@ import { workflowParser } from './workflowParser';
 import { workflowValidator } from './workflowValidator';
 import { historyService } from './historyService';
 import { envManager } from './envManager';
-import type { ExecutionArtifact, ExecutionOptions, ExecutionRecord, ExecutionStatus } from '../types/execution.types';
+import type { ExecutionOptions, ExecutionRecord, ExecutionStatus } from '../types/execution.types';
 
 export class ExecutionEngine {
   private activeExecutionId: string | null = null;
@@ -194,7 +193,6 @@ export class ExecutionEngine {
         actArgs: [],
         jobs: [],
         logSummary: actRunner.getLogs().join('\n'),
-        artifacts: collectExecutionArtifacts(workspaceRoot, actCwd),
       };
       await historyService.save(record);
       // Notificar o webview com o histórico atualizado para que o painel Histórico reflita
@@ -275,77 +273,6 @@ function findExistingFile(root: string, candidates: string[]): string | undefine
     if (fs.existsSync(filePath)) return filePath;
   }
   return undefined;
-}
-
-function collectExecutionArtifacts(workspaceRoot: string, actCwd: string): ExecutionArtifact[] {
-  const artifactRoot = resolveArtifactServerPath(workspaceRoot, actCwd);
-  if (!artifactRoot || !fs.existsSync(artifactRoot)) return [];
-
-  try {
-    return fs.readdirSync(artifactRoot, { withFileTypes: true })
-      .filter((entry) => !entry.name.startsWith('.'))
-      .map((entry) => buildArtifact(path.join(artifactRoot, entry.name), entry.name))
-      .filter((artifact): artifact is ExecutionArtifact => artifact !== undefined);
-  } catch {
-    return [];
-  }
-}
-
-function resolveArtifactServerPath(workspaceRoot: string, actCwd: string): string | undefined {
-  const candidates = Array.from(new Set([
-    path.join(workspaceRoot, '.actrc'),
-    path.join(actCwd, '.actrc'),
-    path.join(os.homedir(), '.actrc'),
-  ]));
-
-  for (const filePath of candidates) {
-    const configured = readArtifactServerPath(filePath);
-    if (configured) return path.isAbsolute(configured) ? configured : path.resolve(path.dirname(filePath), configured);
-  }
-
-  return undefined;
-}
-
-function readArtifactServerPath(filePath: string): string | undefined {
-  if (!fs.existsSync(filePath)) return undefined;
-  const tokens = fs.readFileSync(filePath, 'utf-8')
-    .split(/\r?\n/)
-    .map((line) => line.replace(/#.*$/, '').trim())
-    .filter(Boolean)
-    .flatMap((line) => line.split(/\s+/));
-
-  for (let index = 0; index < tokens.length; index++) {
-    const token = tokens[index];
-    if (token === '--artifact-server-path') return tokens[index + 1];
-    if (token.startsWith('--artifact-server-path=')) return token.slice('--artifact-server-path='.length);
-  }
-  return undefined;
-}
-
-function buildArtifact(artifactPath: string, name: string): ExecutionArtifact | undefined {
-  try {
-    const stats = fs.statSync(artifactPath);
-    const details = getPathDetails(artifactPath);
-    return {
-      name,
-      path: artifactPath,
-      size: details.size,
-      fileCount: details.fileCount,
-      createdAt: stats.mtime.toISOString(),
-    };
-  } catch {
-    return undefined;
-  }
-}
-
-function getPathDetails(artifactPath: string): { size: number; fileCount: number } {
-  const stats = fs.statSync(artifactPath);
-  if (!stats.isDirectory()) return { size: stats.size, fileCount: 1 };
-
-  return fs.readdirSync(artifactPath, { withFileTypes: true }).reduce((total, entry) => {
-    const child = getPathDetails(path.join(artifactPath, entry.name));
-    return { size: total.size + child.size, fileCount: total.fileCount + child.fileCount };
-  }, { size: 0, fileCount: 0 });
 }
 
 export const executionEngine = new ExecutionEngine();

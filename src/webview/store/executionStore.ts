@@ -436,13 +436,9 @@ export const useExecutionStore = create<StoreState>((set, get) => ({
       case 'log':
         set((s) => {
           const id = `log-${++logCounter}`;
-          const keptLogs = s.logs.slice(-999); // manter apenas os últimos 1000 logs
-          const graphSnapshotsByLogId: Record<string, GraphTimelineSnapshot> = {};
-          keptLogs.forEach((log) => {
-            const snapshot = s.graphSnapshotsByLogId[log.id];
-            if (snapshot) graphSnapshotsByLogId[log.id] = snapshot;
-          });
-          graphSnapshotsByLogId[id] = createGraphSnapshot(s);
+          // Performance: apenas adicionar log sem criar snapshots por linha
+          // (snapshots completos são criados apenas ao final da execução)
+          const keptLogs = s.logs.length >= 1000 ? s.logs.slice(-999) : s.logs;
           return {
             logs: [
               ...keptLogs,
@@ -456,7 +452,6 @@ export const useExecutionStore = create<StoreState>((set, get) => ({
                 timestamp: event.payload.timestamp,
               },
             ],
-            graphSnapshotsByLogId,
           };
         });
         break;

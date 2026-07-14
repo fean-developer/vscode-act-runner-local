@@ -1,6 +1,5 @@
 import React, { useMemo, useState } from 'react';
 import { useExecutionStore } from '../store/executionStore';
-import type { ExecutionArtifact } from '../../types/execution.types';
 
 const PAGE_SIZE = 20;
 
@@ -10,7 +9,6 @@ export function HistoryPanel() {
   const graphSnapshotsByExecutionId = useExecutionStore((s) => s.graphSnapshotsByExecutionId);
   const restoreGraphForExecution = useExecutionStore((s) => s.restoreGraphForExecution);
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [expandedArtifactsId, setExpandedArtifactsId] = useState<string | null>(null);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [logSearchQuery, setLogSearchQuery] = useState('');
@@ -27,12 +25,6 @@ export function HistoryPanel() {
     window.__vscode__?.postMessage({ type: 'command:restoreHistoryRepository', payload: { executionId: id } });
     restoreGraphForExecution(id);
   };
-
-  const openArtifact = (executionId: string, artifactPath: string) =>
-    window.__vscode__?.postMessage({ type: 'command:openArtifact', payload: { executionId, artifactPath } });
-
-  const downloadArtifact = (executionId: string, artifactPath: string) =>
-    window.__vscode__?.postMessage({ type: 'command:downloadArtifact', payload: { executionId, artifactPath } });
 
   const filteredHistory = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -93,9 +85,6 @@ export function HistoryPanel() {
         const canExpand = hasLogs || !!logFallback;
         const branch = formatBranch(r.workflowRef);
         const menuOpen = openMenuId === r.id;
-        const artifacts = r.artifacts ?? [];
-        const hasArtifacts = artifacts.length > 0;
-        const artifactsExpanded = expandedArtifactsId === r.id;
 
         return (
           <div key={r.id}>
@@ -136,17 +125,6 @@ export function HistoryPanel() {
                     >
                       {isExpanded ? 'Ocultar log' : 'Ver log'}
                     </button>
-                    <button
-                      type="button"
-                      style={{ ...styles.menuItem, ...(!hasArtifacts ? styles.menuItemDisabled : {}) }}
-                      disabled={!hasArtifacts}
-                      onClick={() => {
-                        setExpandedArtifactsId(artifactsExpanded ? null : r.id);
-                        setOpenMenuId(null);
-                      }}
-                    >
-                      {artifactsExpanded ? 'Ocultar artefatos' : `Ver artefatos (${artifacts.length})`}
-                    </button>
                     <button type="button" style={styles.menuItem} onClick={() => { rerun(r.id); setOpenMenuId(null); }}>Reexecutar</button>
                     <button type="button" style={{ ...styles.menuItem, ...styles.dangerItem }} onClick={() => { deleteEntry(r.id); setOpenMenuId(null); }}>Deletar</button>
                   </div>
@@ -163,14 +141,6 @@ export function HistoryPanel() {
                   setActiveLogMatchIndex(0);
                 }}
                 onActiveMatchIndexChange={setActiveLogMatchIndex}
-              />
-            )}
-            {artifactsExpanded && (
-              <ArtifactPanel
-                artifacts={artifacts}
-                executionId={r.id}
-                onOpen={openArtifact}
-                onDownload={downloadArtifact}
               />
             )}
           </div>
@@ -254,32 +224,6 @@ function HistoryLogPanel({ lines, query, activeMatchIndex, onQueryChange, onActi
   );
 }
 
-function ArtifactPanel({ artifacts, executionId, onOpen, onDownload }: {
-  artifacts: ExecutionArtifact[];
-  executionId: string;
-  onOpen: (executionId: string, artifactPath: string) => void;
-  onDownload: (executionId: string, artifactPath: string) => void;
-}) {
-  return (
-    <div style={styles.artifactPanel}>
-      <div style={styles.artifactHeader}>Artifacts</div>
-      {artifacts.map((artifact) => (
-        <div key={artifact.path} style={styles.artifactRow}>
-          <div style={styles.artifactIcon}>▣</div>
-          <div style={styles.artifactMain}>
-            <div style={styles.artifactName}>{artifact.name}</div>
-            <div style={styles.artifactMeta}>
-              {artifact.fileCount} {artifact.fileCount === 1 ? 'file' : 'files'} · {formatBytes(artifact.size)}
-            </div>
-          </div>
-          <button type="button" style={styles.artifactButton} onClick={() => onOpen(executionId, artifact.path)}>Mostrar</button>
-          <button type="button" style={styles.artifactButton} onClick={() => onDownload(executionId, artifact.path)}>Baixar</button>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 function splitLogFallback(logFallback: string | null): string[] {
   return logFallback ? logFallback.split(/\r?\n/) : [];
 }
@@ -328,12 +272,6 @@ function statusIcon(s: string) {
   return ({ success: '✓', failed: '✗', cancelled: '⊘', running: '◉' } as Record<string, string>)[s] ?? '○';
 }
 
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
 const styles: Record<string, React.CSSProperties> = {
   container: { flex: 1, overflow: 'auto', padding: 20, background: '#0d1117' },
   empty: { flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6e7681', padding: 40 },
@@ -370,12 +308,4 @@ const styles: Record<string, React.CSSProperties> = {
   logSearchBody: { overflow: 'auto', padding: '10px 16px' },
   logLine: { fontFamily: 'monospace', fontSize: 11, color: '#8b949e', lineHeight: '1.5', whiteSpace: 'pre-wrap', wordBreak: 'break-all', margin: 0, borderLeft: '2px solid transparent', paddingLeft: 6, marginLeft: -6 },
   logMark: { background: '#d2992244', color: '#e6edf3', padding: '0 1px', borderRadius: 2 },
-  artifactPanel: { background: '#0d1117', borderBottom: '1px solid #21262d', padding: '12px 16px' },
-  artifactHeader: { color: '#e6edf3', fontSize: 12, fontWeight: 700, marginBottom: 8 },
-  artifactRow: { display: 'grid', gridTemplateColumns: '24px minmax(0, 1fr) auto auto', gap: 10, alignItems: 'center', padding: '10px 0', borderTop: '1px solid #21262d' },
-  artifactIcon: { color: '#58a6ff', fontSize: 14, textAlign: 'center' },
-  artifactMain: { minWidth: 0 },
-  artifactName: { color: '#e6edf3', fontSize: 12, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
-  artifactMeta: { color: '#8b949e', fontSize: 11, marginTop: 2 },
-  artifactButton: { padding: '5px 10px', border: '1px solid #30363d', borderRadius: 6, background: '#161b22', color: '#c9d1d9', cursor: 'pointer', fontSize: 12 },
 };

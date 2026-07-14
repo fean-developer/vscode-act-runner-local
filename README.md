@@ -109,11 +109,6 @@ Crie na raiz do projeto:
 # Allows containers to reach: sonarqube:9000  localhost:5000  portainer:9443
 --network platform_net
 
-# Store upload-artifact / download-artifact data locally.
-# Bind to 172.18.0.1 (platform_net gateway) so containers can reach the artifact server.
---artifact-server-path /tmp/act-artifacts
---artifact-server-addr 172.18.0.1
-
 # Reuse containers between runs to avoid re-downloading SDKs (217MB .NET SDK etc.)
 # Disabled: --reuse causes "No such container" errors when containers are cleaned between runs.
 # Clean up manually when needed: docker rm -f $(docker ps -aq --filter "name=act-")

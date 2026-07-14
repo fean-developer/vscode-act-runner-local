@@ -71,14 +71,6 @@ export interface ExecutionGraphHistory {
   timeline: ExecutionGraphTimelineEntry[];
 }
 
-export interface ExecutionArtifact {
-  name: string;
-  path: string;
-  size: number;
-  fileCount: number;
-  createdAt?: string;
-}
-
 export interface ExecutionRecord {
   id: string;
   workflowPath: string;
@@ -95,7 +87,6 @@ export interface ExecutionRecord {
   jobs: JobResult[];
   logSummary: string;
   graphHistory?: ExecutionGraphHistory;
-  artifacts?: ExecutionArtifact[];
 }
 
 export interface ExecutionOptions {
@@ -109,7 +100,7 @@ export interface ExecutionOptions {
   varFile?: string;
   secretsFile?: string;
   trigger?: ExecutionTrigger;
-  workspaceRoot?: string;  // pasta raiz do projeto (sobrepõe workspace do VSCode)
-  actCwd?: string;         // diretório de trabalho do act (para reusable workflows fora do projeto)
-  workflowName?: string;   // nome display do workflow (para strip do prefixo nos brackets do act)
+  workspaceRoot?: string;       // pasta raiz do projeto (sobrepõe workspace do VSCode)
+  actCwd?: string;              // diretório de trabalho do act (para reusable workflows fora do projeto)
+  workflowName?: string;        // nome display do workflow (para strip do prefixo nos brackets do act)
 }

@@ -2,10 +2,17 @@
 
 ## v2.10.23
 
-### Adicionado
+### Removido
 
-- Tela Summary agora exibe uma seção **Artifacts** no estilo GitHub Actions, abaixo do grafo da execução.
-- A seção suporta múltiplos artefatos por execução, exibindo nome, tamanho e ação de download.
+- Removida toda visualização de artefatos no Histórico e no resumo da execução.
+- Removida a coleta/busca de artefatos no final da execução para evitar qualquer custo de I/O relacionado a `upload-artifact`.
+- Removidos comandos internos de abrir/baixar artefatos e o envio de `--artifact-server-path` pela extensão.
+
+### Otimização de Performance
+
+- **Remoção de snapshots por linha de log**: Cada linha de log deixava de criar cópias completas do grafo, eliminando lentidão durante workflows com muitas linhas de output.
+- **Coleta de artefatos simplificada**: Artefatos são coletados apenas no final da execução (sem varredura em background). Apenas arquivos `.zip` são listados, evitando travamento em diretórios grandes.
+- **Remoção de estado de artefatos ao vivo**: O estado `liveArtifactsByExecutionId` foi removido — artefatos aparecem via histórico assim que a execução termina.
 
 ## v2.10.22
 

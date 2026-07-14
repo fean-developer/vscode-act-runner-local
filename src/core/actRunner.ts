@@ -8,6 +8,10 @@ import type { ExecutionOptions } from '../types/execution.types';
 
 type LogLevel = 'info' | 'warn' | 'error' | 'debug' | 'notice';
 
+// Throttle mínimo entre execuções de "docker image prune -f" — essa limpeza não
+// precisa (nem deve) rodar a cada execução, especialmente em WSL2 onde pode ser lenta.
+const IMAGE_PRUNE_THROTTLE_MS = 15 * 60 * 1000;
+
 // Caminhos candidatos para o binário do act em ordem de prioridade
 const ACT_CANDIDATE_PATHS: string[] = [
   path.join(os.homedir(), '.act', 'act'),          // ~/.act/act  (seu caso)
@@ -109,6 +113,10 @@ export class ActRunner {
 
   /** Log lines acumulados da execução atual (para persistência no logSummary) */
   private accumulatedLogs: string[] = [];
+
+  /** Timestamp (ms) da última vez que rodamos "docker image prune -f", para não
+   *  disparar essa limpeza (potencialmente lenta, sobretudo em WSL2) a cada execução. */
+  private lastImagePruneAt = 0;
 
   /**
    * Último outer job visto — usado para inferir conclusão do outer job
@@ -353,8 +361,16 @@ export class ActRunner {
    * Remove imagens Docker dangling (sem tag e sem uso) geradas como camadas
    * intermediárias durante o build do pipeline.
    * Equivalente a: docker image prune -f
+   * Throttled: essa operação pode ser lenta (sobretudo em WSL2) e não afeta a
+   * corretude da execução, então só roda de fato uma vez a cada
+   * IMAGE_PRUNE_THROTTLE_MS — evitando trabalho em background após cada run.
    */
   private cleanupDanglingImages(): Promise<void> {
+    const nowMs = Date.now();
+    if (nowMs - this.lastImagePruneAt < IMAGE_PRUNE_THROTTLE_MS) {
+      return Promise.resolve();
+    }
+    this.lastImagePruneAt = nowMs;
     return new Promise((resolve) => {
       actLog('[act-runner] prunando imagens dangling...');
       const prune = spawn('docker', ['image', 'prune', '-f'], { stdio: 'ignore' });

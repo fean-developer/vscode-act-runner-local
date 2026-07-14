@@ -216,24 +216,4 @@ describe('ExecutionEngine', () => {
     );
   });
 
-  it('salva metadados de artifacts encontrados no artifact-server-path do act', async () => {
-    const artifactsRoot = path.join(tempRoot, 'artifacts');
-    const reportDir = path.join(artifactsRoot, 'report');
-    fs.mkdirSync(reportDir, { recursive: true });
-    fs.writeFileSync(path.join(reportDir, 'index.html'), '<h1>Report</h1>');
-    fs.writeFileSync(path.join(tempRoot, '.actrc'), `--artifact-server-path ${artifactsRoot}\n`);
-
-    await engine.run({ workflowPath: '.github/workflows/ci.yml', workspaceRoot: tempRoot });
-
-    expect(historyService.save).toHaveBeenCalledWith(
-      expect.objectContaining({
-        artifacts: [expect.objectContaining({
-          name: 'report',
-          path: reportDir,
-          fileCount: 1,
-          size: 15,
-        })],
-      })
-    );
-  });
 });
