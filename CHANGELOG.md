@@ -1,5 +1,32 @@
 # Changelog
 
+## v2.10.23
+
+### Adicionado
+
+- Tela Summary agora exibe uma seção **Artifacts** no estilo GitHub Actions, abaixo do grafo da execução.
+- A seção suporta múltiplos artefatos por execução, exibindo nome, tamanho e ação de download.
+
+## v2.10.22
+
+### Adicionado
+
+- Busca no log atual com contador de ocorrências, navegação anterior/próxima e destaque da linha encontrada.
+- Busca dentro do log expandido no Histórico, também com contador, navegação e destaque da ocorrência ativa.
+
+## v2.10.21
+
+### Corrigido
+
+- Secrets e variáveis com valores multilinha entre aspas agora são carregados e salvos sem quebrar o formulário de edição.
+- Conteúdo de uma private key multilinha não é mais interpretado como novas secrets vazias.
+- Tela de Analytics alinhada ao visual escuro GitHub-like usado nas demais telas.
+
+### Adicionado
+
+- Histórico agora lista artefatos gerados pelo `actions/upload-artifact` quando o `act` usa `--artifact-server-path`.
+- Cada artefato pode ser mostrado no sistema de arquivos ou baixado/copiado para outro destino pela extensão.
+
 ## v2.10.20
 
 ### Segurança

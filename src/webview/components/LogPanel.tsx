@@ -211,7 +211,10 @@ export function LogPanel({ height }: { height: number }) {
   const restoreGraphAtLog = useExecutionStore((s) => s.restoreGraphAtLog);
   const restoreLatestGraphState = useExecutionStore((s) => s.restoreLatestGraphState);
   const bodyRef = useRef<HTMLDivElement>(null);
+  const lineRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeMatchIndex, setActiveMatchIndex] = useState(0);
 
   // Filtra logs pelo job/step selecionado no grafo
   const filteredLogs = logFilter
@@ -267,6 +270,23 @@ export function LogPanel({ height }: { height: number }) {
     return items;
   }, [filteredLogs]);
 
+  const normalizedSearch = searchQuery.trim().toLowerCase();
+  const searchMatches = useMemo(() => {
+    if (!normalizedSearch) return [];
+    return filteredLogs.filter((log) => stripAnsi(log.line).toLowerCase().includes(normalizedSearch));
+  }, [filteredLogs, normalizedSearch]);
+  const activeMatchId = searchMatches[activeMatchIndex]?.id ?? null;
+
+  const changeSearch = (value: string) => {
+    setSearchQuery(value);
+    setActiveMatchIndex(0);
+  };
+
+  const moveMatch = (direction: 1 | -1) => {
+    if (searchMatches.length === 0) return;
+    setActiveMatchIndex((current) => (current + direction + searchMatches.length) % searchMatches.length);
+  };
+
   const toggleGroup = (id: string) =>
     setExpandedGroups(prev => {
       const next = new Set(prev);
@@ -277,9 +297,14 @@ export function LogPanel({ height }: { height: number }) {
   // Auto-scroll to bottom
   useEffect(() => {
     const el = bodyRef.current;
-    if (!el) return;
+    if (!el || normalizedSearch) return;
     el.scrollTop = el.scrollHeight;
-  }, [filteredLogs]);
+  }, [filteredLogs, normalizedSearch]);
+
+  useEffect(() => {
+    if (!activeMatchId) return;
+    lineRefs.current.get(activeMatchId)?.scrollIntoView({ block: 'center' });
+  }, [activeMatchId]);
 
   return (
     <div style={{ height, display: 'flex', flexDirection: 'column', borderTop: '1px solid #21262d', background: '#0d1117', overflow: 'hidden' }}>
@@ -308,6 +333,20 @@ export function LogPanel({ height }: { height: number }) {
             voltar ao atual
           </button>
         )}
+        <div style={styles.searchWrap}>
+          <input
+            style={styles.searchInput}
+            value={searchQuery}
+            onChange={(event) => changeSearch(event.target.value)}
+            placeholder="Buscar no log"
+          />
+          <span style={styles.searchCount}>
+            {normalizedSearch ? `${searchMatches.length ? activeMatchIndex + 1 : 0}/${searchMatches.length}` : '0/0'}
+          </span>
+          <button style={styles.searchBtn} disabled={searchMatches.length === 0} onClick={() => moveMatch(-1)}>↑</button>
+          <button style={styles.searchBtn} disabled={searchMatches.length === 0} onClick={() => moveMatch(1)}>↓</button>
+          {searchQuery && <button style={styles.searchBtn} onClick={() => changeSearch('')}>limpar</button>}
+        </div>
       </div>
       <div ref={bodyRef} style={styles.body}>
         {displayItems.length === 0 ? (
@@ -318,14 +357,17 @@ export function LogPanel({ height }: { height: number }) {
           displayItems.map((item) => {
             if (item.type === 'line') {
               const color = levelColor(item.log.level);
+              const isSearchMatch = normalizedSearch && stripAnsi(item.log.line).toLowerCase().includes(normalizedSearch);
+              const isActiveMatch = activeMatchId === item.log.id;
               return (
                 <div
                   key={item.log.id}
+                  ref={(element) => setLineRef(lineRefs.current, item.log.id, element)}
                   style={{
                     ...styles.logLine,
                     color,
-                    background: selectedTimelineLogId === item.log.id ? '#1f6feb22' : undefined,
-                    borderLeftColor: selectedTimelineLogId === item.log.id ? '#58a6ff' : 'transparent',
+                    background: isActiveMatch ? '#d2992233' : isSearchMatch ? '#d2992218' : selectedTimelineLogId === item.log.id ? '#1f6feb22' : undefined,
+                    borderLeftColor: isActiveMatch ? '#d29922' : selectedTimelineLogId === item.log.id ? '#58a6ff' : 'transparent',
                   }}
                   onClick={() => restoreGraphAtLog(item.log.id)}
                   title="Restaurar o grafo neste ponto do log"
@@ -335,7 +377,8 @@ export function LogPanel({ height }: { height: number }) {
               );
             }
             // Grupo colapsável (::group:: ... ::endgroup::)
-            const isExpanded = expandedGroups.has(item.id);
+            const groupHasMatch = normalizedSearch && item.lines.some((line) => stripAnsi(line.line).toLowerCase().includes(normalizedSearch));
+            const isExpanded = expandedGroups.has(item.id) || !!groupHasMatch;
             return (
               <div key={item.id} style={{ margin: '2px 0' }}>
                 <div
@@ -355,19 +398,27 @@ export function LogPanel({ height }: { height: number }) {
                 {isExpanded && (
                   <div style={styles.groupBody}>
                     {item.lines.map((l) => (
+                      (() => {
+                        const color = levelColor(l.level);
+                        const isSearchMatch = normalizedSearch && stripAnsi(l.line).toLowerCase().includes(normalizedSearch);
+                        const isActiveMatch = activeMatchId === l.id;
+                        return (
                       <div
                         key={l.id}
+                        ref={(element) => setLineRef(lineRefs.current, l.id, element)}
                         style={{
                           ...styles.logLine,
-                          color: levelColor(l.level),
-                          background: selectedTimelineLogId === l.id ? '#1f6feb22' : undefined,
-                          borderLeftColor: selectedTimelineLogId === l.id ? '#58a6ff' : 'transparent',
+                          color,
+                          background: isActiveMatch ? '#d2992233' : isSearchMatch ? '#d2992218' : selectedTimelineLogId === l.id ? '#1f6feb22' : undefined,
+                          borderLeftColor: isActiveMatch ? '#d29922' : selectedTimelineLogId === l.id ? '#58a6ff' : 'transparent',
                         }}
                         onClick={() => restoreGraphAtLog(l.id)}
                         title="Restaurar o grafo neste ponto do log"
                       >
-                        {renderLogText(l.line, levelColor(l.level))}
+                        {renderLogText(l.line, color)}
                       </div>
+                        );
+                      })()
                     ))}
                   </div>
                 )}
@@ -380,6 +431,11 @@ export function LogPanel({ height }: { height: number }) {
   );
 }
 
+function setLineRef(refs: Map<string, HTMLDivElement>, id: string, element: HTMLDivElement | null): void {
+  if (element) refs.set(id, element);
+  else refs.delete(id);
+}
+
 const styles: Record<string, React.CSSProperties> = {
   header: { padding: '4px 12px', fontSize: 11, color: '#8b949e', background: '#161b22', borderBottom: '1px solid #21262d', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8 },
   headerTitle: { fontWeight: 600, color: '#c9d1d9' },
@@ -387,6 +443,10 @@ const styles: Record<string, React.CSSProperties> = {
   breadcrumb: { display: 'flex', alignItems: 'center', gap: 6 },
   breadcrumbLabel: { color: '#58a6ff', fontWeight: 500 },
   clearBtn: { padding: '1px 7px', border: '1px solid #30363d', borderRadius: 3, background: 'transparent', color: '#6e7681', cursor: 'pointer', fontSize: 10 },
+  searchWrap: { marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4 },
+  searchInput: { width: 180, padding: '2px 7px', border: '1px solid #30363d', borderRadius: 4, background: '#0d1117', color: '#c9d1d9', fontSize: 11 },
+  searchCount: { minWidth: 42, color: '#8b949e', textAlign: 'right', fontSize: 10 },
+  searchBtn: { padding: '1px 6px', border: '1px solid #30363d', borderRadius: 3, background: 'transparent', color: '#8b949e', cursor: 'pointer', fontSize: 10 },
   body: { flex: 1, overflowY: 'auto', padding: '6px 10px', fontFamily: 'monospace', fontSize: 12, color: '#c9d1d9' },
   logLine: { lineHeight: 1.5, cursor: 'pointer', borderLeft: '2px solid transparent', paddingLeft: 6, marginLeft: -6 },
   groupHeader: { display: 'flex', alignItems: 'center', cursor: 'pointer', userSelect: 'none', padding: '1px 0', borderLeft: '2px solid #21262d', paddingLeft: 6 },

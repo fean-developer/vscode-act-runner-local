@@ -23,24 +23,16 @@ export class EnvManager {
     const map = new Map<string, string>();
     if (!fs.existsSync(filePath)) return map;
 
-    fs.readFileSync(filePath, 'utf-8')
-      .split('\n')
-      .forEach((line: string) => {
-        const trimmed = line.trim();
-        if (!trimmed || trimmed.startsWith('#')) return;
-        const eqIdx = trimmed.indexOf('=');
-        if (eqIdx < 0) return;
-        const key = trimmed.slice(0, eqIdx).trim();
-        const value = trimmed.slice(eqIdx + 1).trim();
-        if (key) map.set(key, value);
-      });
+    parseEnvFileContent(fs.readFileSync(filePath, 'utf-8')).forEach(({ key, value }) => {
+      map.set(key, value);
+    });
 
     return map;
   }
 
   write(filePath: string, vars: Map<string, string>): void {
     const lines = Array.from(vars.entries())
-      .map(([key, value]) => `${key}=${value}`)
+      .map(([key, value]) => `${key}=${formatEnvValue(value)}`)
       .join('\n');
     fs.mkdirSync(path.dirname(filePath), { recursive: true });
     fs.writeFileSync(filePath, lines + '\n', 'utf-8');
@@ -158,6 +150,78 @@ export class EnvManager {
       vscode.window.showInformationMessage('✅ .gitignore atualizado com sucesso.');
     }
   }
+}
+
+function parseEnvFileContent(content: string): { key: string; value: string }[] {
+  const entries: { key: string; value: string }[] = [];
+  const lines = content.split(/\r?\n/);
+
+  for (let index = 0; index < lines.length; index++) {
+    const rawLine = lines[index];
+    const trimmed = rawLine.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+
+    const eqIdx = rawLine.indexOf('=');
+    if (eqIdx < 0) continue;
+
+    const key = rawLine.slice(0, eqIdx).trim();
+    if (!key) continue;
+
+    const rawValue = rawLine.slice(eqIdx + 1).trim();
+    if (startsQuotedValue(rawValue)) {
+      const quote = rawValue[0];
+      const firstChunk = rawValue.slice(1);
+      const valueLines: string[] = [];
+      let current = firstChunk;
+
+      while (true) {
+        const closingIndex = findClosingQuote(current, quote);
+        if (closingIndex >= 0) {
+          valueLines.push(current.slice(0, closingIndex));
+          break;
+        }
+
+        valueLines.push(current);
+        index += 1;
+        if (index >= lines.length) break;
+        current = lines[index];
+      }
+
+      entries.push({ key, value: normalizeQuotedValue(valueLines, quote) });
+      continue;
+    }
+
+    entries.push({ key, value: rawValue });
+  }
+
+  return entries;
+}
+
+function startsQuotedValue(value: string): boolean {
+  return value.startsWith('"') || value.startsWith("'");
+}
+
+function findClosingQuote(value: string, quote: string): number {
+  for (let index = 0; index < value.length; index++) {
+    if (value[index] === quote && value[index - 1] !== '\\') return index;
+  }
+  return -1;
+}
+
+function normalizeQuotedValue(valueLines: string[], quote: string): string {
+  const normalized = [...valueLines];
+  if (normalized[0] === '') normalized.shift();
+  if (normalized[normalized.length - 1] === '') normalized.pop();
+  return normalized.join('\n').replace(new RegExp(`\\\\${escapeRegExp(quote)}`, 'g'), quote).replace(/\\\\/g, '\\');
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function formatEnvValue(value: string): string {
+  if (!value.includes('\n')) return value;
+  return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
 }
 
 export const envManager = new EnvManager();
