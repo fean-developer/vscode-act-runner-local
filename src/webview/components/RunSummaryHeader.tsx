@@ -2,11 +2,12 @@ import React from 'react';
 import { useExecutionStore, type NodeStatus } from '../store/executionStore';
 
 export function RunSummaryHeader() {
-  const { execution, nodes } = useExecutionStore();
+  const { execution, nodes, history } = useExecutionStore();
   const jobs = nodes.filter((node) => node.type === 'job');
   const totalJobs = jobs.length;
   const successfulJobs = jobs.filter((job) => job.status === 'success').length;
   const status = toNodeStatus(execution.status);
+  const artifactCount = history.find((record) => record.id === execution.executionId)?.artifacts?.length ?? 0;
 
   return (
     <section style={styles.card}>

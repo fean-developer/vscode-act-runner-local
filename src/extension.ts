@@ -621,6 +621,14 @@ function openWebviewPanel(context: vscode.ExtensionContext, initialView: string,
         });
         break;
       }
+      case 'command:openArtifact': {
+        await openArtifactFromHistory(msg.payload.executionId, msg.payload.artifactPath);
+        break;
+      }
+      case 'command:downloadArtifact': {
+        await downloadArtifactFromHistory(msg.payload.executionId, msg.payload.artifactPath);
+        break;
+      }
       case 'state:request':
         webviewPanel?.webview.postMessage({
           type: 'state:snapshot',
@@ -715,4 +723,64 @@ function createWorkflowDispatchPayload(inputs: Record<string, string | number | 
   };
   require('fs').writeFileSync(filePath, JSON.stringify(payload, null, 2), 'utf-8');
   return filePath;
+}
+
+function findArtifactInHistory(executionId: string, artifactPath: string): { name: string; path: string } | undefined {
+  const record = historyService.getById(executionId);
+  return record?.artifacts?.find((artifact) => artifact.path === artifactPath);
+}
+
+async function openArtifactFromHistory(executionId: string, artifactPath: string): Promise<void> {
+  const artifact = findArtifactInHistory(executionId, artifactPath);
+  if (!artifact) {
+    vscode.window.showErrorMessage('Artefato não encontrado no histórico desta execução.');
+    return;
+  }
+
+  const uri = vscode.Uri.file(artifact.path);
+  try {
+    await vscode.commands.executeCommand('revealFileInOS', uri);
+  } catch {
+    await vscode.env.openExternal(uri);
+  }
+}
+
+async function downloadArtifactFromHistory(executionId: string, artifactPath: string): Promise<void> {
+  const artifact = findArtifactInHistory(executionId, artifactPath);
+  if (!artifact) {
+    vscode.window.showErrorMessage('Artefato não encontrado no histórico desta execução.');
+    return;
+  }
+
+  const fsNode = require('fs') as typeof import('fs');
+  if (!fsNode.existsSync(artifact.path)) {
+    vscode.window.showErrorMessage('O arquivo do artefato não existe mais no disco.');
+    return;
+  }
+
+  const stats = fsNode.statSync(artifact.path);
+  if (stats.isDirectory()) {
+    const target = await vscode.window.showOpenDialog({
+      canSelectFolders: true,
+      canSelectFiles: false,
+      canSelectMany: false,
+      openLabel: 'Selecionar pasta de destino',
+      title: `Baixar artefato ${artifact.name}`,
+    });
+    const targetDir = target?.[0]?.fsPath;
+    if (!targetDir) return;
+    const destination = path.join(targetDir, artifact.name);
+    fsNode.cpSync(artifact.path, destination, { recursive: true, force: true });
+    vscode.window.showInformationMessage(`Artefato baixado em ${destination}`);
+    return;
+  }
+
+  const destination = await vscode.window.showSaveDialog({
+    defaultUri: vscode.Uri.file(path.basename(artifact.path)),
+    saveLabel: 'Baixar artefato',
+    title: `Baixar artefato ${artifact.name}`,
+  });
+  if (!destination) return;
+  fsNode.copyFileSync(artifact.path, destination.fsPath);
+  vscode.window.showInformationMessage(`Artefato baixado em ${destination.fsPath}`);
 }
