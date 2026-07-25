@@ -1,6 +1,6 @@
 // Tipos do sistema de eventos — discriminated unions para type-safety total
 
-import type { ExecutionGraphHistory, ExecutionStatus, JobStatus, StepStatus } from './execution.types';
+import type { ExecutionStatus, JobStatus, StepStatus } from './execution.types';
 import type { JobDefinition } from './workflow.types';
 
 export interface ExecutionStartPayload {
@@ -95,8 +95,5 @@ export type WebviewCommand =
   | { type: 'command:loadEnv';      payload: { tab: string; filePath?: string } }
   | { type: 'command:selectEnvFile'; payload: { tab: string } }
   | { type: 'command:saveEnv';      payload: { tab: string; rows: { key: string; value: string }[]; filePath?: string } }
-  | { type: 'command:saveGraphHistory'; payload: { executionId: string; graphHistory: ExecutionGraphHistory } }
-  | { type: 'command:openArtifact'; payload: { executionId: string; artifactPath: string } }
-  | { type: 'command:downloadArtifact'; payload: { executionId: string; artifactPath: string } }
   | { type: 'command:deleteHistory'; payload: { executionId: string } }
   | { type: 'state:request';        payload: Record<string, never> };

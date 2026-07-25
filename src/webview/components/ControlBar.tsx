@@ -11,12 +11,10 @@ export function ControlBar() {
   const send = (type: string, payload: Record<string, unknown> = {}) =>
     window.__vscode__?.postMessage({ type, payload });
 
-  // Inclui workflowPath nas execuções iniciadas pelo webview
-  const runPayload = { workflowPath: execution.workflowPath ?? selectedWorkflowPath ?? undefined };
   const isRunning = execution.status === 'running';
 
   const runSelectedWorkflow = () => {
-    const workflowPath = execution.workflowPath ?? selectedWorkflowPath ?? undefined;
+    const workflowPath = selectedWorkflowPath ?? execution.workflowPath ?? undefined;
     const workflow = workflows.find((item) => item.filePath === workflowPath);
     if (workflow?.inputs.length) {
       openWorkflowRunDialog(workflow.filePath);

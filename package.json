@@ -2,7 +2,7 @@
   "name": "act-visual-runner",
   "displayName": "Act/Run - GitHub Actions Visual locally",
   "description": "Execute GitHub Actions localmente com interface visual estilo n8n usando nektos/act",
-  "version": "2.10.26",
+  "version": "2.10.33",
   "publisher": "fean-developer",
   "engines": {
     "vscode": "^1.85.0"
@@ -207,8 +207,9 @@
         },
         "actRunner.maxHistoryRecords": {
           "type": "number",
-          "default": 100,
-          "description": "Número máximo de registros no histórico de execuções"
+          "default": 40,
+          "maximum": 40,
+          "description": "Número máximo de registros no histórico de execuções (limitado a 40 para manter a performance)"
         },
         "actRunner.secretsFile": {
           "type": "string",

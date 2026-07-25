@@ -44,6 +44,7 @@ describe('ExecutionEngine', () => {
 
     (historyService.save as jest.Mock).mockResolvedValue(undefined);
     (historyService.getAll as jest.Mock).mockReturnValue([]);
+    (historyService.getAllForWebview as jest.Mock).mockReturnValue([]);
   });
 
   afterEach(() => {
@@ -71,6 +72,27 @@ describe('ExecutionEngine', () => {
   it('isRunning() deve ser false após execução completar', async () => {
     await engine.run({ workflowPath: '.github/workflows/ci.yml', workspaceRoot: tempRoot });
     expect(engine.isRunning()).toBe(false);
+  });
+
+  it('persiste logSummary limitado para permitir Ver log no histórico', async () => {
+    (actRunner.getLogs as jest.Mock).mockReturnValue(['linha 1', 'linha 2']);
+
+    await engine.run({ workflowPath: '.github/workflows/ci.yml', workspaceRoot: tempRoot });
+
+    expect(historyService.save).toHaveBeenCalledWith(
+      expect.objectContaining({ logSummary: 'linha 1\nlinha 2' })
+    );
+  });
+
+  it('trunca logSummary grande antes de salvar no histórico', async () => {
+    (actRunner.getLogs as jest.Mock).mockReturnValue(Array.from({ length: 1200 }, (_, index) => `linha ${index}`));
+
+    await engine.run({ workflowPath: '.github/workflows/ci.yml', workspaceRoot: tempRoot });
+
+    const savedRecord = (historyService.save as jest.Mock).mock.calls[0][0];
+    expect(savedRecord.logSummary).toContain('older log line(s) omitted');
+    expect(savedRecord.logSummary).toContain('linha 1199');
+    expect(savedRecord.logSummary.length).toBeLessThanOrEqual(80_100);
   });
 
   it('usa .env como envFile e fallback de varFile quando .vars não existe', async () => {

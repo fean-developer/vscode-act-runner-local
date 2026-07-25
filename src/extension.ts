@@ -65,20 +65,22 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('actRunner.showMenu', () => showMainMenu()),
 
     vscode.commands.registerCommand('actRunner.runWorkflow', async (arg?: unknown) => {
-      const wfPath = extractPath(arg) ?? (await pickWorkflow());
+      const root = workspaceRoot();
+      const wfPath = resolveWorkflowPathForExecution(root, extractPath(arg)) ?? (await pickWorkflow());
       if (!wfPath) return;
-      const opts: ExecutionOptions = { workflowPath: wfPath, trigger: 'manual', workspaceRoot: workspaceRoot() };
+      const opts: ExecutionOptions = { workflowPath: wfPath, trigger: 'manual', workspaceRoot: root };
       openWebviewPanel(context, 'graph', () => safeRun(() => executionEngine.run(opts)));
     }),
 
     vscode.commands.registerCommand('actRunner.runJob', async (arg?: unknown, jobId?: string) => {
-      const wfPath = extractPath(arg) ?? (await pickWorkflow());
+      const root = workspaceRoot();
+      const wfPath = resolveWorkflowPathForExecution(root, extractPath(arg)) ?? (await pickWorkflow());
       if (!wfPath) return;
       const job = (arg && typeof (arg as any).jobId === 'string' ? (arg as any).jobId : undefined)
         ?? jobId
         ?? (await pickJob(wfPath));
       if (!job) return;
-      const opts: ExecutionOptions = { workflowPath: wfPath, jobId: job, trigger: 'manual', workspaceRoot: workspaceRoot() };
+      const opts: ExecutionOptions = { workflowPath: wfPath, jobId: job, trigger: 'manual', workspaceRoot: root };
       openWebviewPanel(context, 'graph', () => safeRun(() => executionEngine.run(opts)));
     }),
 
@@ -294,8 +296,28 @@ function getGitBranchSnapshot(root: string): { currentBranch?: string; branches:
 function sendWorkflowSnapshot(): void {
   webviewPanel?.webview.postMessage({
     type: 'state:snapshot',
-    payload: { workflows: getWorkflowSummaries(), repository: getRepositorySnapshot() },
+    payload: { workflows: getWorkflowSummaries(), repository: getRepositorySnapshot(), history: historyService.getAllForWebview() },
   });
+}
+
+function resolveWorkflowPathForExecution(root: string, requestedWorkflowPath?: string): string | undefined {
+  if (!root) return undefined;
+  const availableWorkflows = workflowParser.discoverWorkflows(root);
+  if (availableWorkflows.length === 0) return undefined;
+  if (!requestedWorkflowPath) return availableWorkflows[0];
+
+  const requested = path.isAbsolute(requestedWorkflowPath)
+    ? path.normalize(requestedWorkflowPath)
+    : path.resolve(root, requestedWorkflowPath);
+
+  if (availableWorkflows.some((wfPath) => path.normalize(wfPath) === requested)) {
+    return requested;
+  }
+
+  vscode.window.showWarningMessage(
+    'O workflow selecionado não pertence ao repositório ativo. Executando o primeiro workflow do repositório selecionado.'
+  );
+  return availableWorkflows[0];
 }
 
 async function selectProjectFromUser(): Promise<void> {
@@ -446,7 +468,8 @@ function openWebviewPanel(context: vscode.ExtensionContext, initialView: string,
     switch (msg.type) {
       case 'command:run': {
         const opts = msg.payload as Partial<ExecutionOptions>;
-        const workflowPath = opts.workflowPath ?? (await pickWorkflow());
+        const root = workspaceRoot();
+        const workflowPath = resolveWorkflowPathForExecution(root, opts.workflowPath) ?? (await pickWorkflow());
         if (!workflowPath) break;
         const workflowInputs = (msg.payload as { workflowInputs?: Record<string, string | number | boolean> }).workflowInputs;
         const workflowRef = (msg.payload as { workflowRef?: string }).workflowRef;
@@ -454,7 +477,7 @@ function openWebviewPanel(context: vscode.ExtensionContext, initialView: string,
         await safeRun(() => executionEngine.run({
           ...opts,
           workflowPath,
-          workspaceRoot: workspaceRoot(),
+          workspaceRoot: root,
           workflowRef,
           ...(workflowInputs && { eventType: 'workflow_dispatch', eventPayloadPath }),
         }));
@@ -462,8 +485,7 @@ function openWebviewPanel(context: vscode.ExtensionContext, initialView: string,
       }
       case 'command:quickRun': {
         const root = workspaceRoot();
-        const paths = workflowParser.discoverWorkflows(root);
-        const workflowPath = (msg.payload as Partial<ExecutionOptions>).workflowPath ?? paths[0];
+        const workflowPath = resolveWorkflowPathForExecution(root, (msg.payload as Partial<ExecutionOptions>).workflowPath);
         if (!workflowPath) { vscode.window.showErrorMessage('Nenhum workflow encontrado.'); break; }
         await safeRun(() => executionEngine.run({ workflowPath, trigger: 'quick-run', workspaceRoot: root }));
         break;
@@ -608,31 +630,14 @@ function openWebviewPanel(context: vscode.ExtensionContext, initialView: string,
         await historyService.deleteById(delId);
         webviewPanel?.webview.postMessage({
           type: 'state:snapshot',
-          payload: { history: historyService.getAll() },
+          payload: { history: historyService.getAllForWebview() },
         });
-        break;
-      }
-      case 'command:saveGraphHistory': {
-        const { executionId, graphHistory } = msg.payload;
-        await historyService.updateGraphHistory(executionId, graphHistory);
-        webviewPanel?.webview.postMessage({
-          type: 'state:snapshot',
-          payload: { history: historyService.getAll() },
-        });
-        break;
-      }
-      case 'command:openArtifact': {
-        await openArtifactFromHistory(msg.payload.executionId, msg.payload.artifactPath);
-        break;
-      }
-      case 'command:downloadArtifact': {
-        await downloadArtifactFromHistory(msg.payload.executionId, msg.payload.artifactPath);
         break;
       }
       case 'state:request':
         webviewPanel?.webview.postMessage({
           type: 'state:snapshot',
-          payload: { history: historyService.getAll(), workflows: getWorkflowSummaries(), repository: getRepositorySnapshot() },
+          payload: { history: historyService.getAllForWebview(), workflows: getWorkflowSummaries(), repository: getRepositorySnapshot() },
         });
         // Webview está pronto (React montou): disparar execução pendente, se houver
         if (pendingExecution) {
@@ -723,64 +728,4 @@ function createWorkflowDispatchPayload(inputs: Record<string, string | number | 
   };
   require('fs').writeFileSync(filePath, JSON.stringify(payload, null, 2), 'utf-8');
   return filePath;
-}
-
-function findArtifactInHistory(executionId: string, artifactPath: string): { name: string; path: string } | undefined {
-  const record = historyService.getById(executionId);
-  return record?.artifacts?.find((artifact) => artifact.path === artifactPath);
-}
-
-async function openArtifactFromHistory(executionId: string, artifactPath: string): Promise<void> {
-  const artifact = findArtifactInHistory(executionId, artifactPath);
-  if (!artifact) {
-    vscode.window.showErrorMessage('Artefato não encontrado no histórico desta execução.');
-    return;
-  }
-
-  const uri = vscode.Uri.file(artifact.path);
-  try {
-    await vscode.commands.executeCommand('revealFileInOS', uri);
-  } catch {
-    await vscode.env.openExternal(uri);
-  }
-}
-
-async function downloadArtifactFromHistory(executionId: string, artifactPath: string): Promise<void> {
-  const artifact = findArtifactInHistory(executionId, artifactPath);
-  if (!artifact) {
-    vscode.window.showErrorMessage('Artefato não encontrado no histórico desta execução.');
-    return;
-  }
-
-  const fsNode = require('fs') as typeof import('fs');
-  if (!fsNode.existsSync(artifact.path)) {
-    vscode.window.showErrorMessage('O arquivo do artefato não existe mais no disco.');
-    return;
-  }
-
-  const stats = fsNode.statSync(artifact.path);
-  if (stats.isDirectory()) {
-    const target = await vscode.window.showOpenDialog({
-      canSelectFolders: true,
-      canSelectFiles: false,
-      canSelectMany: false,
-      openLabel: 'Selecionar pasta de destino',
-      title: `Baixar artefato ${artifact.name}`,
-    });
-    const targetDir = target?.[0]?.fsPath;
-    if (!targetDir) return;
-    const destination = path.join(targetDir, artifact.name);
-    fsNode.cpSync(artifact.path, destination, { recursive: true, force: true });
-    vscode.window.showInformationMessage(`Artefato baixado em ${destination}`);
-    return;
-  }
-
-  const destination = await vscode.window.showSaveDialog({
-    defaultUri: vscode.Uri.file(path.basename(artifact.path)),
-    saveLabel: 'Baixar artefato',
-    title: `Baixar artefato ${artifact.name}`,
-  });
-  if (!destination) return;
-  fsNode.copyFileSync(artifact.path, destination.fsPath);
-  vscode.window.showInformationMessage(`Artefato baixado em ${destination.fsPath}`);
 }

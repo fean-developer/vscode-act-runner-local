@@ -1,5 +1,66 @@
 # Changelog
 
+## v2.10.33
+
+### Corrigido
+
+- Restaurado o log no Histórico com persistência limitada aos últimos registros e tamanho máximo controlado.
+- A ação "Ver log" volta a funcionar para novas execuções sem reintroduzir payloads grandes que causavam OOM.
+
+## v2.10.32
+
+### Alterado
+
+- Histórico limitado a no máximo 40 execuções, removendo automaticamente os registros mais antigos ao salvar novos runs.
+- Snapshot de histórico enviado ao webview também limitado aos 40 registros mais recentes.
+- Tela de Histórico agora informa que apenas os 40 runs mais recentes são mantidos para preservar performance.
+
+## v2.10.31
+
+### Corrigido
+
+- Removido envio automático de snapshot de histórico ao final da execução para evitar payload no momento crítico de encerramento.
+- A execução não persiste mais `logSummary`, eliminando gravação e reenvio de logs grandes no histórico.
+- Removida escrita de cada linha do `act` no Output Channel da extensão, evitando acúmulo de memória no VS Code.
+- Adicionado limite rígido de linhas de log enviadas ao webview; linhas excedentes são omitidas com aviso, preservando estabilidade em workflows verbosos.
+
+## v2.10.30
+
+### Corrigido
+
+- Removida a persistência de `graphHistory` no evento `execution:end` para evitar serialização pesada no exato momento de finalização do workflow.
+- Adicionado limite de tamanho para linhas de log enviadas ao webview, reduzindo pressão de memória no renderer.
+- Adicionado limite de captura para `summary` (quantidade de linhas e tamanho por linha), evitando crescimento descontrolado.
+- Compactação automática de histórico legado na inicialização (limpa timelines antigas e trunca summaries grandes já persistidos).
+- Snapshot de histórico para webview limitado aos registros mais recentes e com `graphHistory` compactado.
+
+## v2.10.29
+
+- Mitigado crash por OOM após `execution:end` com compactação do histórico enviado ao webview (sem timeline pesada no snapshot).
+- Limitado o buffer de logs acumulados no runner e truncamento de linhas muito longas para evitar crescimento de memória durante execuções verbosas.
+- Limitado o tamanho de `logSummary` persistido no histórico, reduzindo payload de estado no final da execução.
+- Ajustada a persistência de graph history para não duplicar snapshots finais em massa no encerramento.
+
+## v2.10.28
+
+### Removido
+
+- Removida completamente qualquer busca/coleta de artefatos no fim da execução do `act`.
+- Removidos os comandos e handlers de abrir/baixar artefatos no host e no webview.
+- Removida a seção de artefatos da tela de Summary e a tipagem associada no domínio de execução.
+
+### Corrigido
+
+- Ao finalizar o `act` (sucesso ou erro), a extensão não executa mais nenhuma varredura adicional de disco relacionada a artefatos.
+
+## v2.10.27
+
+### Corrigido
+
+- Execução iniciada pelo webview agora valida se o workflow pertence ao repositório ativo; quando houver caminho stale de outro projeto, a extensão força um workflow do repositório selecionado.
+- Botão "Executar" do painel passou a priorizar o workflow selecionado na lista atual, evitando reaproveitar workflow antigo da última execução.
+- Removida a limpeza automática de imagens dangling ao final da execução, eliminando processamento pesado em background que podia deixar a sessão aparentemente travada após concluir o run.
+
 ## v2.10.26
 
 ### Corrigido

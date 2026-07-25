@@ -5,12 +5,16 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { eventBus } from './eventBus';
 import type { ExecutionOptions } from '../types/execution.types';
+import type { LogPayload } from '../types/events.types';
 
 type LogLevel = 'info' | 'warn' | 'error' | 'debug' | 'notice';
 
-// Throttle mínimo entre execuções de "docker image prune -f" — essa limpeza não
-// precisa (nem deve) rodar a cada execução, especialmente em WSL2 onde pode ser lenta.
-const IMAGE_PRUNE_THROTTLE_MS = 15 * 60 * 1000;
+const MAX_ACCUMULATED_LOG_LINES = 3000;
+const MAX_ACCUMULATED_LOG_LINE_CHARS = 4000;
+const MAX_EVENT_LOG_LINE_CHARS = 2000;
+const MAX_UI_LOG_EVENTS = 1500;
+const MAX_SUMMARY_LINES = 1200;
+const MAX_SUMMARY_LINE_CHARS = 2000;
 
 // Caminhos candidatos para o binário do act em ordem de prioridade
 const ACT_CANDIDATE_PATHS: string[] = [
@@ -114,10 +118,6 @@ export class ActRunner {
   /** Log lines acumulados da execução atual (para persistência no logSummary) */
   private accumulatedLogs: string[] = [];
 
-  /** Timestamp (ms) da última vez que rodamos "docker image prune -f", para não
-   *  disparar essa limpeza (potencialmente lenta, sobretudo em WSL2) a cada execução. */
-  private lastImagePruneAt = 0;
-
   /**
    * Último outer job visto — usado para inferir conclusão do outer job
    * quando act não emite [OuterJob] 🏁 Job succeeded para reusable workflows.
@@ -146,12 +146,65 @@ export class ActRunner {
 
   /** Conteúdo acumulado do GITHUB_STEP_SUMMARY (capturado do output ◎ Summary) */
   private summaryLines: string[] = [];
+  private summaryTruncated = false;
   /** Flag indicando que estamos capturando linhas do summary (entre ◎ Summary e o próximo bracket) */
   private inSummaryCapture = false;
+  private uiLogEventsSent = 0;
+  private uiLogEventsDropped = 0;
 
   /** Retorna os logs acumulados da última execução */
   getLogs(): string[] {
     return [...this.accumulatedLogs];
+  }
+
+  private pushAccumulatedLog(line: string): void {
+    const normalized = line.length > MAX_ACCUMULATED_LOG_LINE_CHARS
+      ? `${line.slice(0, MAX_ACCUMULATED_LOG_LINE_CHARS)} …[truncated]`
+      : line;
+    this.accumulatedLogs.push(normalized);
+    if (this.accumulatedLogs.length > MAX_ACCUMULATED_LOG_LINES) {
+      this.accumulatedLogs = this.accumulatedLogs.slice(-MAX_ACCUMULATED_LOG_LINES);
+    }
+  }
+
+  private toUiLogLine(line: string): string {
+    return line.length > MAX_EVENT_LOG_LINE_CHARS
+      ? `${line.slice(0, MAX_EVENT_LOG_LINE_CHARS)} …[truncated]`
+      : line;
+  }
+
+  private dispatchLog(payload: LogPayload): void {
+    if (this.uiLogEventsSent >= MAX_UI_LOG_EVENTS) {
+      this.uiLogEventsDropped++;
+      return;
+    }
+    this.uiLogEventsSent++;
+    eventBus.dispatch({ type: 'log', payload });
+  }
+
+  private flushDroppedLogNotice(executionId: string): void {
+    if (this.uiLogEventsDropped === 0) return;
+    eventBus.dispatch({
+      type: 'log',
+      payload: {
+        executionId,
+        line: `[act-runner] ${this.uiLogEventsDropped} log lines omitted from UI to avoid VS Code OOM. Full act output is not persisted by the extension.`,
+        level: 'warn',
+        timestamp: now(),
+      },
+    });
+    this.uiLogEventsDropped = 0;
+  }
+
+  private pushSummaryLine(line: string): void {
+    if (this.summaryLines.length >= MAX_SUMMARY_LINES) {
+      this.summaryTruncated = true;
+      return;
+    }
+    const normalized = line.length > MAX_SUMMARY_LINE_CHARS
+      ? `${line.slice(0, MAX_SUMMARY_LINE_CHARS)} …[truncated]`
+      : line;
+    this.summaryLines.push(normalized);
   }
 
   /** Testa se um caminho/comando executa act corretamente */
@@ -245,6 +298,9 @@ export class ActRunner {
     this.workflowDisplayName = options.workflowName ?? null;
     this.summaryLines = [];
     this.inSummaryCapture = false;
+    this.summaryTruncated = false;
+    this.uiLogEventsSent = 0;
+    this.uiLogEventsDropped = 0;
 
     // Limpar containers act-* órfãos de execuções anteriores antes de iniciar
     await this.cleanupActContainers();
@@ -266,11 +322,8 @@ export class ActRunner {
           const classified = this.classifyLogLine(line, 'error');
           const clean = stripAnsi(classified.line);
           if (clean.trim()) {
-            this.accumulatedLogs.push(clean);
-            eventBus.dispatch({
-              type: 'log',
-              payload: { executionId, line: classified.line, level: classified.level, timestamp: now() },
-            });
+            this.pushAccumulatedLog(clean);
+            this.dispatchLog({ executionId, line: this.toUiLogLine(classified.line), level: classified.level, timestamp: now() });
           }
         });
       });
@@ -288,6 +341,7 @@ export class ActRunner {
 
         // Flush summary acumulado do output do act
         this.flushSummary(executionId);
+        this.flushDroppedLogNotice(executionId);
 
         eventBus.dispatch({
           type: 'execution:end',
@@ -298,8 +352,6 @@ export class ActRunner {
             completedAt: now(),
           },
         });
-        // Limpar imagens dangling após execução (criadas como camadas intermediárias)
-        this.cleanupDanglingImages().catch(() => { /* silencioso */ });
         if (code === 0) resolve();
         else reject(new Error(`act encerrou com código ${code}`));
       });
@@ -320,11 +372,13 @@ export class ActRunner {
     this.failedInnerByOuter.clear();
     this.summaryLines = [];
     this.inSummaryCapture = false;
+    this.summaryTruncated = false;
+    this.uiLogEventsSent = 0;
+    this.uiLogEventsDropped = 0;
     this.activeProcess?.kill('SIGTERM');
     this.activeProcess = null;
     // Limpar containers act-* que ficaram ativos após o kill
     this.cleanupActContainers()
-      .then(() => this.cleanupDanglingImages())
       .catch(() => { /* silencioso */ });
   }
 
@@ -354,28 +408,6 @@ export class ActRunner {
         rm.on('close', () => resolve());
         rm.on('error', () => resolve());
       });
-    });
-  }
-
-  /**
-   * Remove imagens Docker dangling (sem tag e sem uso) geradas como camadas
-   * intermediárias durante o build do pipeline.
-   * Equivalente a: docker image prune -f
-   * Throttled: essa operação pode ser lenta (sobretudo em WSL2) e não afeta a
-   * corretude da execução, então só roda de fato uma vez a cada
-   * IMAGE_PRUNE_THROTTLE_MS — evitando trabalho em background após cada run.
-   */
-  private cleanupDanglingImages(): Promise<void> {
-    const nowMs = Date.now();
-    if (nowMs - this.lastImagePruneAt < IMAGE_PRUNE_THROTTLE_MS) {
-      return Promise.resolve();
-    }
-    this.lastImagePruneAt = nowMs;
-    return new Promise((resolve) => {
-      actLog('[act-runner] prunando imagens dangling...');
-      const prune = spawn('docker', ['image', 'prune', '-f'], { stdio: 'ignore' });
-      prune.on('close', () => resolve());
-      prune.on('error', () => resolve()); // docker não disponível
     });
   }
 
@@ -425,9 +457,6 @@ export class ActRunner {
     const clean = stripCarriageReturn(raw);
     const cleanForParsingOnly = stripAnsi(clean);
     if (!clean.trim()) return;
-
-    // Log every line to the output channel for visibility / debugging
-    actLog(cleanForParsingOnly);
 
     // Remover prefixo do workflow name para parsear brackets corretamente
     // Act v2 prefixa todos os brackets com: [WorkflowDisplayName/JobName]
@@ -556,8 +585,8 @@ export class ActRunner {
       const rawLogMatch = cleanNoWorkflowPrefix.match(RE_LOG_LINE);
       const rawContent = rawLogMatch ? rawLogMatch[2] : m[2];
       const classified = this.classifyLogLine(rawContent, 'info');
-      this.accumulatedLogs.push(stripAnsi(classified.line));
-      eventBus.dispatch({ type: 'log', payload: { executionId, jobId: effectiveJobId, stepId, line: classified.line, level: classified.level, timestamp: now() } });
+      this.pushAccumulatedLog(stripAnsi(classified.line));
+      this.dispatchLog({ executionId, jobId: effectiveJobId, stepId, line: this.toUiLogLine(classified.line), level: classified.level, timestamp: now() });
       return;
     }
     // ── Detecção de GITHUB_STEP_SUMMARY via output do act ──────────────────
@@ -574,14 +603,14 @@ export class ActRunner {
         this.flushSummary(executionId);
         this.inSummaryCapture = true;
         if (summaryMatch[1].trim()) {
-          this.summaryLines.push(summaryMatch[1].trim());
+          this.pushSummaryLine(summaryMatch[1].trim());
         }
         // Também enviar como log normal
         const { effectiveJobId } = parseEffectiveBracket(bracketFallback[1]);
         const stepId = this.currentStep.get(effectiveJobId) ?? effectiveJobId;
         const classified = this.classifyLogLine(rawLineContent, 'info');
-        this.accumulatedLogs.push(stripAnsi(classified.line));
-        eventBus.dispatch({ type: 'log', payload: { executionId, jobId: effectiveJobId, stepId, line: classified.line, level: classified.level, timestamp: now() } });
+        this.pushAccumulatedLog(stripAnsi(classified.line));
+        this.dispatchLog({ executionId, jobId: effectiveJobId, stepId, line: this.toUiLogLine(classified.line), level: classified.level, timestamp: now() });
         return;
       }
       // Qualquer outra linha com bracket encerra a captura de summary
@@ -594,24 +623,26 @@ export class ActRunner {
       const stepId = this.currentStep.get(effectiveJobId) ?? effectiveJobId;
       if (lineContent) {
         const classified = this.classifyLogLine(rawLineContent, 'info');
-        this.accumulatedLogs.push(stripAnsi(classified.line));
-        eventBus.dispatch({ type: 'log', payload: { executionId, jobId: effectiveJobId, stepId, line: classified.line, level: classified.level, timestamp: now() } });
+        this.pushAccumulatedLog(stripAnsi(classified.line));
+        this.dispatchLog({ executionId, jobId: effectiveJobId, stepId, line: this.toUiLogLine(classified.line), level: classified.level, timestamp: now() });
       }
       return;
     }
     // Linha sem bracket — pode ser continuação do summary ou stdout bruto
     if (this.inSummaryCapture) {
-      this.summaryLines.push(cleanForParsingOnly);
+      this.pushSummaryLine(cleanForParsingOnly);
     }
     const classified = this.classifyLogLine(clean, 'info');
-    this.accumulatedLogs.push(stripAnsi(classified.line));
-    eventBus.dispatch({ type: 'log', payload: { executionId, line: classified.line, level: classified.level, timestamp: now() } });
+    this.pushAccumulatedLog(stripAnsi(classified.line));
+    this.dispatchLog({ executionId, line: this.toUiLogLine(classified.line), level: classified.level, timestamp: now() });
   }
 
   /** Despacha o summary acumulado para o webview se houver conteúdo */
   private dispatchSummary(executionId: string): void {
     if (this.summaryLines.length === 0) return;
-    const content = this.summaryLines.join('\n');
+    const content = this.summaryTruncated
+      ? `${this.summaryLines.join('\n')}\n...[summary truncated]`
+      : this.summaryLines.join('\n');
     actLog(`[act-runner] summary:update (${this.summaryLines.length} lines)`);
     eventBus.dispatch({ type: 'summary:update', payload: { executionId, content } });
   }

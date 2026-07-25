@@ -51,6 +51,8 @@ interface GraphTimelineSnapshot {
   summaryContent: string;
 }
 
+const MAX_PERSISTED_TIMELINE_ENTRIES = 200;
+
 export interface WorkflowListItem {
   name: string;
   filePath: string;
@@ -294,21 +296,24 @@ export const useExecutionStore = create<StoreState>((set, get) => ({
     const state = get();
     const final = state.graphSnapshotsByExecutionId[executionId] ?? state.liveGraphSnapshot;
     if (!final) return undefined;
+
+    // Persist only timeline points that actually have a dedicated snapshot.
+    // This avoids duplicating the same "final" snapshot hundreds of times,
+    // which can cause large payloads and OOM at execution end.
+    const logsWithSnapshot = state.logs
+      .filter((log) => log.executionId === executionId && !!state.graphSnapshotsByLogId[log.id])
+      .slice(-MAX_PERSISTED_TIMELINE_ENTRIES);
+
     return {
       final: toPersistedSnapshot(final),
-      timeline: state.logs
-        .filter((log) => log.executionId === executionId)
-        .map((log) => {
-          const snapshot = state.graphSnapshotsByLogId[log.id] ?? final;
-          return {
-            line: log.line,
-            level: log.level,
-            timestamp: log.timestamp,
-            jobId: log.jobId,
-            stepId: log.stepId,
-            snapshot: toPersistedSnapshot(snapshot),
-          };
-        }),
+      timeline: logsWithSnapshot.map((log) => ({
+        line: log.line,
+        level: log.level,
+        timestamp: log.timestamp,
+        jobId: log.jobId,
+        stepId: log.stepId,
+        snapshot: toPersistedSnapshot(state.graphSnapshotsByLogId[log.id]!),
+      })),
     };
   },
 

@@ -77,15 +77,6 @@ export function App() {
 
       // Repassar eventos de execução para o store
       handleEvent(msg as ActEvent);
-      if (msg.type === 'execution:end') {
-        const graphHistory = useExecutionStore.getState().getExecutionGraphHistory(msg.payload.executionId);
-        if (graphHistory) {
-          window.__vscode__?.postMessage({
-            type: 'command:saveGraphHistory',
-            payload: { executionId: msg.payload.executionId, graphHistory },
-          });
-        }
-      }
     };
 
     window.addEventListener('message', handler);

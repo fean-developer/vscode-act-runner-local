@@ -62,6 +62,7 @@ export function HistoryPanel() {
         <div>
           <div style={styles.title}>All workflow runs</div>
           <div style={styles.subtitle}>Showing runs from all workflows</div>
+          <div style={styles.retentionNote}>For performance, only the latest 40 workflow runs are kept. Older runs are removed automatically.</div>
         </div>
         <input
           style={styles.search}
@@ -288,6 +289,7 @@ const styles: Record<string, React.CSSProperties> = {
   topBar: { display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 20, marginBottom: 16 },
   title: { color: '#e6edf3', fontSize: 20, fontWeight: 600 },
   subtitle: { color: '#8b949e', fontSize: 12, marginTop: 3 },
+  retentionNote: { color: '#8b949e', fontSize: 11, marginTop: 6 },
   search: { width: 280, padding: '7px 12px', border: '1px solid #30363d', borderRadius: 6, background: '#0d1117', color: '#c9d1d9', fontSize: 12 },
   table: { border: '1px solid #30363d', borderRadius: 6, overflow: 'visible', background: '#0d1117' },
   tableHeader: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 16px', borderBottom: '1px solid #30363d', background: '#161b22', color: '#c9d1d9', fontSize: 12, fontWeight: 600 },
