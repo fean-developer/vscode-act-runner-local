@@ -1,5 +1,6 @@
 import React from 'react';
 import { useExecutionStore } from '../store/executionStore';
+import { t } from '../i18n';
 
 /**
  * Barra de controle superior com botões de execução e navegação.
@@ -27,14 +28,14 @@ export function ControlBar() {
     <div style={styles.bar}>
       <div style={styles.left}>
         {!isRunning && (
-          <button style={styles.btnPrimary} onClick={runSelectedWorkflow}>▶ Executar</button>
+          <button style={styles.btnPrimary} onClick={runSelectedWorkflow}>▶ {t('Run')}</button>
         )}
         {isRunning && (
-          <button style={styles.btnDanger} onClick={() => send('command:stop', {})}>⏹ Parar</button>
+          <button style={styles.btnDanger} onClick={() => send('command:stop', {})}>⏹ {t('Stop')}</button>
         )}
         <button
           style={styles.btnAct}
-          title="Configurar caminho do executável act"
+          title={t('Configure the act executable path')}
           onClick={() => send('command:locateAct', {})}
         >
           ⚙ act
@@ -66,7 +67,7 @@ export function ControlBar() {
 }
 
 const VIEW_LABELS: Record<string, string> = {
-  graph: '🗺 Grafo', history: '📜 Histórico', analytics: '📊 Analytics', env: '⚙️ Settings',
+  graph: `🗺 ${t('Graph')}`, history: `📜 ${t('History')}`, analytics: `📊 ${t('Analytics')}`, env: `⚙️ ${t('Settings')}`,
 };
 
 const styles: Record<string, React.CSSProperties> = {

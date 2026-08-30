@@ -15,6 +15,7 @@ import { StatusBarController } from './providers/statusBarController';
 import type { WebviewCommand } from './types/events.types';
 import type { ExecutionOptions } from './types/execution.types';
 import type { WorkflowDefinition } from './types/workflow.types';
+import { t } from './i18n/messages';
 
 let webviewPanel: vscode.WebviewPanel | undefined;
 /** Execução pendente: inicia quando o webview enviar state:request (React montado) */
@@ -94,9 +95,9 @@ export function activate(context: vscode.ExtensionContext): void {
           description: `${j.steps.length} steps`,
           detail: j.needs?.length ? `needs: ${j.needs.join(', ')}` : undefined,
         }));
-        await vscode.window.showQuickPick(items, { placeHolder: 'Jobs disponíveis (somente leitura)' });
+        await vscode.window.showQuickPick(items, { placeHolder: t('Available jobs (read-only)') });
       } catch (e) {
-        vscode.window.showErrorMessage(`Erro ao listar jobs: ${e instanceof Error ? e.message : e}`);
+        vscode.window.showErrorMessage(t('Failed to list jobs: {0}', e instanceof Error ? e.message : String(e)));
       }
     }),
 
@@ -106,7 +107,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
     vscode.commands.registerCommand('actRunner.forceReset', () => {
       executionEngine.forceReset();
-      vscode.window.showInformationMessage('✅ Estado da execução resetado.');
+      vscode.window.showInformationMessage(t('✅ Execution state reset.'));
     }),
 
     vscode.commands.registerCommand('actRunner.validateWorkflow', async (arg?: unknown) => {
@@ -116,12 +117,12 @@ export function activate(context: vscode.ExtensionContext): void {
         const wf = workflowParser.parse(wfPath);
         const result = workflowValidator.validate(wf);
         if (result.valid) {
-          vscode.window.showInformationMessage('✅ Workflow válido!');
+          vscode.window.showInformationMessage(t('✅ Workflow is valid!'));
         } else {
-          vscode.window.showErrorMessage(`❌ Erros de validação:\n${result.errors.join('\n')}`);
+          vscode.window.showErrorMessage(t('❌ Validation errors:\n{0}', result.errors.join('\n')));
         }
       } catch (e) {
-        vscode.window.showErrorMessage(`Erro ao parsear YAML: ${e instanceof Error ? e.message : e}`);
+        vscode.window.showErrorMessage(t('Failed to parse YAML: {0}', e instanceof Error ? e.message : String(e)));
       }
     }),
 
@@ -141,7 +142,7 @@ export function activate(context: vscode.ExtensionContext): void {
       // Tentar auto-detect antes de pedir ao usuário
       const autoFound = await actRunner.autoDetect();
       if (autoFound) {
-        vscode.window.showInformationMessage(`✅ act detectado automaticamente: ${autoFound}`);
+        vscode.window.showInformationMessage(t('✅ act detected automatically: {0}', autoFound));
         return;
       }
 
@@ -150,9 +151,9 @@ export function activate(context: vscode.ExtensionContext): void {
         canSelectFolders: false,
         canSelectFiles: true,
         canSelectMany: false,
-        openLabel: 'Selecionar o executável do act',
-        title: 'Localizar o binário do act (ex: /home/user/.act/act)',
-        filters: { 'Executável': ['*'] },
+        openLabel: t('Select the act executable'),
+        title: t('Locate the act binary (e.g. /home/user/.act/act)'),
+        filters: { [t('Executable')]: ['*'] },
       });
       if (!uris || uris.length === 0) return;
       const actPath = uris[0].fsPath;
@@ -160,9 +161,9 @@ export function activate(context: vscode.ExtensionContext): void {
       await cfg.update('actPath', actPath, vscode.ConfigurationTarget.Global);
       const ok = await actRunner.isActInstalled(actPath);
       if (ok) {
-        vscode.window.showInformationMessage(`✅ act configurado: ${actPath}`);
+        vscode.window.showInformationMessage(t('✅ act configured: {0}', actPath));
       } else {
-        vscode.window.showErrorMessage(`❌ Não foi possível executar: ${actPath}`);
+        vscode.window.showErrorMessage(t('❌ Could not execute: {0}', actPath));
       }
     }),
   );
@@ -175,18 +176,18 @@ export function activate(context: vscode.ExtensionContext): void {
       // Encontrado — mostrar apenas se era necessário detectar automaticamente
       const configured = vscode.workspace.getConfiguration('actRunner').get<string>('actPath', 'act');
       if (configured !== found) {
-        vscode.window.showInformationMessage(`✅ act detectado automaticamente: ${found}`);
+        vscode.window.showInformationMessage(t('✅ act detected automatically: {0}', found));
       }
     } else {
       vscode.window
         .showWarningMessage(
-          '⚠️ "act" não foi encontrado automaticamente. Informe onde está o executável.',
-          'Localizar act',
-          'Ver instalação'
+          t('⚠️ "act" was not found automatically. Tell us where the executable is.',),
+          t('Locate act'),
+          t('View installation')
         )
         .then((choice) => {
-          if (choice === 'Localizar act') vscode.commands.executeCommand('actRunner.locateAct');
-          if (choice === 'Ver instalação') vscode.env.openExternal(vscode.Uri.parse('https://github.com/nektos/act#installation'));
+          if (choice === t('Locate act')) vscode.commands.executeCommand('actRunner.locateAct');
+          if (choice === t('View installation')) vscode.env.openExternal(vscode.Uri.parse('https://github.com/nektos/act#installation'));
         });
     }
   });
@@ -314,9 +315,7 @@ function resolveWorkflowPathForExecution(root: string, requestedWorkflowPath?: s
     return requested;
   }
 
-  vscode.window.showWarningMessage(
-    'O workflow selecionado não pertence ao repositório ativo. Executando o primeiro workflow do repositório selecionado.'
-  );
+  vscode.window.showWarningMessage(t('The selected workflow does not belong to the active repository. Running the first workflow in the selected repository.'));
   return availableWorkflows[0];
 }
 
@@ -331,8 +330,8 @@ async function selectProjectFromUser(): Promise<void> {
     canSelectFolders: true,
     canSelectFiles: false,
     canSelectMany: false,
-    openLabel: 'Selecionar repositório',
-    title: 'Selecione o repositório que contém .github/workflows/',
+    openLabel: t('Select repository'),
+    title: t('Select the repository containing .github/workflows/'),
     defaultUri: startDir,
   });
   if (!uris || uris.length === 0) return;
@@ -344,29 +343,29 @@ async function selectProjectFromUser(): Promise<void> {
   const found = workflowParser.discoverWorkflows(root);
   if (found.length === 0) {
     vscode.window.showWarningMessage(
-      `⚠️ Nenhum workflow encontrado em ${root}/.github/workflows/`,
-      'Selecionar outra pasta'
+      t('⚠️ No workflow found in {0}/.github/workflows/', root),
+      t('Select another folder')
     ).then((choice) => { if (choice) vscode.commands.executeCommand('actRunner.selectProject'); });
   } else {
-    vscode.window.showInformationMessage(`✅ Repositório selecionado: ${root} (${found.length} workflow(s))`);
+    vscode.window.showInformationMessage(t('✅ Repository selected: {0} ({1} workflow(s))', root, found.length));
   }
 }
 
 async function showMainMenu(): Promise<void> {
   const isRunning = executionEngine.isRunning();
   const items = [
-    { label: '▶ Executar Workflow',                command: 'actRunner.runWorkflow' },
-    { label: '📋 Executar Job',                    command: 'actRunner.runJob' },
-    { label: '📋 Listar Jobs',                     command: 'actRunner.listJobs' },
+    { label: `▶ ${t('Run Workflow')}`, command: 'actRunner.runWorkflow' },
+    { label: `📋 ${t('Run Job')}`, command: 'actRunner.runJob' },
+    { label: `📋 ${t('List Jobs')}`, command: 'actRunner.listJobs' },
     ...(isRunning ? [
-      { label: '⏹ Parar Execução',          command: 'actRunner.stopExecution' },
-      { label: '🔄 Resetar estado (forçar)', command: 'actRunner.forceReset' },
+      { label: `⏹ ${t('Stop Execution')}`, command: 'actRunner.stopExecution' },
+      { label: `🔄 ${t('Reset state (force)')}`, command: 'actRunner.forceReset' },
     ] : []),
-    { label: '✅ Validar Workflow',                command: 'actRunner.validateWorkflow' },
-    { label: '🔐 Gerenciar Variáveis de Ambiente', command: 'actRunner.manageEnv' },
-    { label: '📜 Ver Histórico',                   command: 'actRunner.viewHistory' },
-    { label: '🐳 Alternativas ao Docker Desktop',  command: 'actRunner.dockerGuide' },
-    { label: '🔒 Boas Práticas de Segurança',      command: 'actRunner.securityGuide' },
+    { label: `✅ ${t('Validate Workflow')}`, command: 'actRunner.validateWorkflow' },
+    { label: `🔐 ${t('Manage Environment Variables')}`, command: 'actRunner.manageEnv' },
+    { label: `📜 ${t('View History')}`, command: 'actRunner.viewHistory' },
+    { label: `🐳 ${t('Docker Desktop alternatives')}`, command: 'actRunner.dockerGuide' },
+    { label: `🔒 ${t('Security best practices')}`, command: 'actRunner.securityGuide' },
   ];
   const pick = await vscode.window.showQuickPick(items, { placeHolder: '⚡ Act Visual Runner' });
   if (pick) vscode.commands.executeCommand(pick.command);

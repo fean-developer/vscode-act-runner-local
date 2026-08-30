@@ -9,6 +9,7 @@ import { workflowValidator } from './workflowValidator';
 import { historyService } from './historyService';
 import { envManager } from './envManager';
 import type { ExecutionOptions, ExecutionRecord, ExecutionStatus } from '../types/execution.types';
+import { t } from '../i18n/messages';
 
 const MAX_PERSISTED_LOG_LINES = 1000;
 const MAX_PERSISTED_LOG_SUMMARY_CHARS = 80_000;
@@ -19,26 +20,26 @@ export class ExecutionEngine {
 
   async run(options: ExecutionOptions): Promise<string | 'cancelled'> {
     if (this.activeExecutionId) {
-      throw new Error('Já existe uma execução em andamento. Pare a atual antes de iniciar outra.');
+      throw new Error(t('An execution is already in progress. Stop it before starting another.'));
     }
 
     const actPath = vscode.workspace.getConfiguration('actRunner').get<string>('actPath', 'act');
     if (!await actRunner.isActInstalled(actPath)) {
       const choice = await vscode.window.showErrorMessage(
-        '❌ Executável "act" não encontrado. Informe onde ele está instalado.',
-        'Procurar arquivo...',
-        'Digitar caminho',
-        'Ver instalação'
+        t('❌ The "act" executable was not found. Tell us where it is installed.'),
+        t('Browse for file...'),
+        t('Enter path'),
+        t('View installation')
       );
 
-      if (choice === 'Procurar arquivo...') {
+      if (choice === t('Browse for file...')) {
         const uris = await vscode.window.showOpenDialog({
           canSelectFolders: false,
           canSelectFiles: true,
           canSelectMany: false,
-          openLabel: 'Selecionar executável do act',
-          title: 'Localizar binário do act',
-          filters: { 'Executável': ['*'] },
+          openLabel: t('Select the act executable'),
+          title: t('Locate the act binary'),
+          filters: { [t('Executable')]: ['*'] },
         });
         if (uris && uris.length > 0) {
           const selected = uris[0].fsPath;
@@ -49,15 +50,15 @@ export class ExecutionEngine {
             vscode.window.showInformationMessage(`✅ act configurado: ${selected}`);
             // Retry with new path — fall through (don't return)
           } else {
-            vscode.window.showErrorMessage(`❌ Não foi possível executar: ${selected}`);
+            vscode.window.showErrorMessage(t('❌ Could not execute: {0}', selected));
             return 'cancelled';
           }
         } else {
           return 'cancelled';
         }
-      } else if (choice === 'Digitar caminho') {
+      } else if (choice === t('Enter path')) {
         const typed = await vscode.window.showInputBox({
-          prompt: 'Cole ou digite o caminho completo para o binário do act',
+          prompt: t('Paste or enter the full path to the act binary'),
           placeHolder: '/home/user/.act/act  ou  /usr/local/bin/act',
           ignoreFocusOut: true,
         });
@@ -69,10 +70,10 @@ export class ExecutionEngine {
           vscode.window.showInformationMessage(`✅ act configurado: ${typed.trim()}`);
           // Fall through to run with new path
         } else {
-          vscode.window.showErrorMessage(`❌ Não foi possível executar: ${typed.trim()}`);
+          vscode.window.showErrorMessage(t('❌ Could not execute: {0}', typed.trim()));
           return 'cancelled';
         }
-      } else if (choice === 'Ver instalação') {
+      } else if (choice === t('View installation')) {
         vscode.env.openExternal(vscode.Uri.parse('https://github.com/nektos/act#installation'));
         return 'cancelled';
       } else {
@@ -82,7 +83,7 @@ export class ExecutionEngine {
     const workflow = workflowParser.parse(options.workflowPath);
     const validation = workflowValidator.validate(workflow);
     if (!validation.valid) {
-      throw new Error(`Workflow inválido:\n${validation.errors.join('\n')}`);
+      throw new Error(t('Invalid workflow:\n{0}', validation.errors.join('\n')));
     }
 
     // Verificar TODOS os jobs com reusable workflows (incluindo ./path locais)
@@ -102,7 +103,7 @@ export class ExecutionEngine {
       if (detected && detected !== workspaceRoot) {
         actCwd = detected;
         vscode.window.showInformationMessage(
-          `ℹ️ Executando act a partir de: ${detected} (reusable workflows detectados no diretório pai)`
+          t('ℹ️ Running act from: {0} (reusable workflows detected in the parent directory)', detected)
         );
       }
     }
@@ -122,21 +123,21 @@ export class ExecutionEngine {
         .map(([id, job]) => `• ${job.name ?? id} → ${job.uses}`);
 
       const msg = [
-        `⚠️ ${stillMissing.length} reusable workflow(s) não encontrado(s) localmente:`,
+        t('⚠️ {0} reusable workflow(s) not found locally:', stillMissing.length),
         '',
         jobLabels.join('\n'),
         '',
-        `Diretório base verificado: ${actCwd}`,
-        'O act vai falhar. Execute o projeto do diretório correto.',
+        t('Base directory checked: {0}', actCwd),
+        t('act will fail. Run the project from the correct directory.'),
       ].join('\n');
 
       const choice = await vscode.window.showWarningMessage(
         msg,
         { modal: true },
-        'Executar mesmo assim',
-        'Cancelar'
+        t('Run anyway'),
+        t('Cancel')
       );
-      if (choice !== 'Executar mesmo assim') return 'cancelled';
+      if (choice !== t('Run anyway')) return 'cancelled';
     }
 
     const executionId = randomUUID();

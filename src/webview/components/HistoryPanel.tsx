@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useExecutionStore } from '../store/executionStore';
+import { t } from '../i18n';
 
 const PAGE_SIZE = 20;
 
@@ -53,7 +54,7 @@ export function HistoryPanel() {
   };
 
   if (history.length === 0) {
-    return <div style={styles.empty}>Nenhuma execução registrada ainda.</div>;
+    return <div style={styles.empty}>{t('No workflow runs recorded yet.')}</div>;
   }
 
   return (
@@ -68,7 +69,7 @@ export function HistoryPanel() {
           style={styles.search}
           value={query}
           onChange={(event) => updateQuery(event.target.value)}
-          placeholder="Filter workflow runs"
+          placeholder={t('Filter workflow runs')}
         />
       </div>
 
@@ -78,79 +79,79 @@ export function HistoryPanel() {
           <span style={styles.headerColumns}>Workflow · Event · Status · Branch · Action</span>
         </div>
 
-      {pagedHistory.map((r) => {
-        const isExpanded = expandedId === r.id;
-        const logs = historyLogs[r.id];
-        const hasLogs = logs && logs.length > 0;
-        const canRestoreGraph = !!graphSnapshotsByExecutionId[r.id];
-        const canOpenGraph = canRestoreGraph && !isWorkflowRunning;
-        // fallback: logSummary do ExecutionRecord (execuções de sessões anteriores)
-        const logFallback = !hasLogs && r.logSummary ? r.logSummary : null;
-        const canExpand = hasLogs || !!logFallback;
-        const branch = formatBranch(r.workflowRef);
-        const menuOpen = openMenuId === r.id;
+        {pagedHistory.map((r) => {
+          const isExpanded = expandedId === r.id;
+          const logs = historyLogs[r.id];
+          const hasLogs = logs && logs.length > 0;
+          const canRestoreGraph = !!graphSnapshotsByExecutionId[r.id];
+          const canOpenGraph = canRestoreGraph && !isWorkflowRunning;
+          // fallback: logSummary do ExecutionRecord (execuções de sessões anteriores)
+          const logFallback = !hasLogs && r.logSummary ? r.logSummary : null;
+          const canExpand = hasLogs || !!logFallback;
+          const branch = formatBranch(r.workflowRef);
+          const menuOpen = openMenuId === r.id;
 
-        return (
-          <div key={r.id}>
-            <div
-              style={{ ...styles.row, ...(canOpenGraph ? styles.clickableRow : {}) }}
-              onClick={canOpenGraph ? () => restoreExecution(r.id) : undefined}
-              title={historyRowTitle(canRestoreGraph, isWorkflowRunning)}
-            >
-              <span style={{ color: statusColor(r.status), fontSize: 14 }}>{statusIcon(r.status)}</span>
-              <div style={styles.runMain}>
-                <div style={styles.runTitle}>{r.workflowName}</div>
-                <div style={styles.runSubline}>{eventLabel(r)} · {r.jobId ?? 'todos os jobs'} · {r.trigger}</div>
+          return (
+            <div key={r.id}>
+              <div
+                style={{ ...styles.row, ...(canOpenGraph ? styles.clickableRow : {}) }}
+                onClick={canOpenGraph ? () => restoreExecution(r.id) : undefined}
+                title={historyRowTitle(canRestoreGraph, isWorkflowRunning)}
+              >
+                <span style={{ color: statusColor(r.status), fontSize: 14 }}>{statusIcon(r.status)}</span>
+                <div style={styles.runMain}>
+                  <div style={styles.runTitle}>{r.workflowName}</div>
+                  <div style={styles.runSubline}>{eventLabel(r)} · {r.jobId ?? 'todos os jobs'} · {r.trigger}</div>
+                </div>
+                <span style={styles.statusText}>{capitalize(r.status)}</span>
+                <span style={styles.branchPill}>{branch}</span>
+                <span style={styles.metaBlock}>{new Date(r.startedAt).toLocaleString('pt-BR')}<br />{r.duration != null ? `${(r.duration / 1000).toFixed(1)}s` : '—'}</span>
+                <div style={styles.menuWrap}>
+                  <button
+                    style={styles.kebabButton}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setOpenMenuId(menuOpen ? null : r.id);
+                    }}
+                    title={t('Actions')}
+                  >
+                    ...
+                  </button>
+                  {menuOpen && (
+                    <div style={styles.menu} onClick={(event) => event.stopPropagation()}>
+                      <button
+                        type="button"
+                        style={{ ...styles.menuItem, ...(!canExpand ? styles.menuItemDisabled : {}) }}
+                        disabled={!canExpand}
+                        onClick={() => {
+                          setExpandedId(isExpanded ? null : r.id);
+                          setOpenMenuId(null);
+                        }}
+                      >
+                        {isExpanded ? t('Hide log') : t('View log')}
+                      </button>
+                      <button type="button" style={styles.menuItem} onClick={() => { rerun(r.id); setOpenMenuId(null); }}>{t('Rerun')}</button>
+                      <button type="button" style={{ ...styles.menuItem, ...styles.dangerItem }} onClick={() => { deleteEntry(r.id); setOpenMenuId(null); }}>{t('Delete')}</button>
+                    </div>
+                  )}
+                </div>
               </div>
-              <span style={styles.statusText}>{capitalize(r.status)}</span>
-              <span style={styles.branchPill}>{branch}</span>
-              <span style={styles.metaBlock}>{new Date(r.startedAt).toLocaleString('pt-BR')}<br />{r.duration != null ? `${(r.duration / 1000).toFixed(1)}s` : '—'}</span>
-              <div style={styles.menuWrap}>
-                <button
-                  style={styles.kebabButton}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    setOpenMenuId(menuOpen ? null : r.id);
+              {isExpanded && (
+                <HistoryLogPanel
+                  lines={hasLogs ? logs : splitLogFallback(logFallback)}
+                  query={logSearchQuery}
+                  activeMatchIndex={activeLogMatchIndex}
+                  onQueryChange={(value) => {
+                    setLogSearchQuery(value);
+                    setActiveLogMatchIndex(0);
                   }}
-                  title="Ações"
-                >
-                  ...
-                </button>
-                {menuOpen && (
-                  <div style={styles.menu} onClick={(event) => event.stopPropagation()}>
-                    <button
-                      type="button"
-                      style={{ ...styles.menuItem, ...(!canExpand ? styles.menuItemDisabled : {}) }}
-                      disabled={!canExpand}
-                      onClick={() => {
-                        setExpandedId(isExpanded ? null : r.id);
-                        setOpenMenuId(null);
-                      }}
-                    >
-                      {isExpanded ? 'Ocultar log' : 'Ver log'}
-                    </button>
-                    <button type="button" style={styles.menuItem} onClick={() => { rerun(r.id); setOpenMenuId(null); }}>Reexecutar</button>
-                    <button type="button" style={{ ...styles.menuItem, ...styles.dangerItem }} onClick={() => { deleteEntry(r.id); setOpenMenuId(null); }}>Deletar</button>
-                  </div>
-                )}
-              </div>
+                  onActiveMatchIndexChange={setActiveLogMatchIndex}
+                />
+              )}
             </div>
-            {isExpanded && (
-              <HistoryLogPanel
-                lines={hasLogs ? logs : splitLogFallback(logFallback)}
-                query={logSearchQuery}
-                activeMatchIndex={activeLogMatchIndex}
-                onQueryChange={(value) => {
-                  setLogSearchQuery(value);
-                  setActiveLogMatchIndex(0);
-                }}
-                onActiveMatchIndexChange={setActiveLogMatchIndex}
-              />
-            )}
-          </div>
-        );
-      })}
-      {pagedHistory.length === 0 && <div style={styles.noResults}>Nenhuma execução encontrada para este filtro.</div>}
+          );
+        })}
+        {pagedHistory.length === 0 && <div style={styles.noResults}>{t('No runs found for this filter.')}</div>}
       </div>
 
       <div style={styles.pagination}>

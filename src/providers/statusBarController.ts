@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { eventBus } from '../core/eventBus';
+import { t } from '../i18n/messages';
 
 export class StatusBarController {
   private item: vscode.StatusBarItem;
@@ -29,31 +30,31 @@ export class StatusBarController {
 
   private setIdle(): void {
     this.item.text = '$(run) Act Runner';
-    this.item.tooltip = 'Act Visual Runner — clique para abrir o menu';
+    this.item.tooltip = t('Act Visual Runner - click to open the menu');
     this.item.command = 'actRunner.showMenu';
     this.item.backgroundColor = undefined;
     this.item.color = undefined;
   }
 
   private setRunning(): void {
-    this.item.text = '$(sync~spin) Act: executando...';
-    this.item.tooltip = 'Execução em andamento — clique para parar';
+    this.item.text = `$(sync~spin) Act: ${t('running')}...`;
+    this.item.tooltip = t('Execution in progress - click to stop');
     this.item.command = 'actRunner.stopExecution';
     this.item.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
     this.item.color = undefined;
   }
 
   private setSuccess(): void {
-    this.item.text = '$(check) Act: sucesso';
-    this.item.tooltip = 'Última execução concluída com sucesso';
+    this.item.text = `$(check) Act: ${t('success')}`;
+    this.item.tooltip = t('Last execution completed successfully');
     this.item.command = 'actRunner.showMenu';
     this.item.backgroundColor = undefined;
     this.item.color = new vscode.ThemeColor('charts.green');
   }
 
   private setFailed(): void {
-    this.item.text = '$(error) Act: falhou';
-    this.item.tooltip = 'Última execução falhou — clique para ver detalhes';
+    this.item.text = `$(error) Act: ${t('failed')}`;
+    this.item.tooltip = t('Last execution failed - click to view details');
     this.item.command = 'actRunner.viewHistory';
     this.item.backgroundColor = new vscode.ThemeColor('statusBarItem.errorBackground');
     this.item.color = undefined;

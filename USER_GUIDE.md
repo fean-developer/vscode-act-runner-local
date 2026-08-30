@@ -1,140 +1,123 @@
-# Act Visual Runner — User Guide
+# Act Visual Runner - User Guide
 
-## Requisitos
+[English](USER_GUIDE.md) | [Português (Brasil)](USER_GUIDE-pt-br.md)
 
-Antes de usar, confirme que você tem:
+## Requirements
 
-1. **nektos/act** instalado
-2. **Docker** (ou Rancher Desktop / OrbStack / Podman com socket Docker compatível) rodando
-3. Um repositório com workflows em `.github/workflows/*.yml`
+Before using the extension, confirm that you have:
 
----
+1. **nektos/act** installed
+2. **Docker** (or Rancher Desktop / OrbStack / Podman with a compatible Docker socket) running
+3. A repository with workflows in `.github/workflows/*.yml`
 
-# Guia de instalação do nektos/act
+## nektos/act Installation
 
-- Para instalar o `act` siga a documentação oficial [act - User Guide | Manual | Docs | Documentation](https://nektosact.com/installation/index.html)
+To install `act`, follow the [official documentation](https://nektosact.com/installation/index.html).
 
-## Primeira execução
+## First Run
 
-### 1. Abrir o painel
+### 1. Open the panel
 
-Clique no ícone **⏵ ACT Runner** na barra de atividades lateral esquerda do VSCode.
+Click the **ACT Runner** icon in the VS Code Activity Bar.
 
-### 2. Selecionar o projeto
+### 2. Select the project
 
-Se o workspace tiver múltiplas pastas, use **Act: Selecionar Projeto** para apontar para o repositório correto.
+If the workspace contains multiple folders, use **Act: Select Project** to choose the correct repository.
 
-### 3. Executar um workflow
+### 3. Run a workflow
 
-- No **Explorador de Workflows** (painel lateral), expanda a lista de workflows
-- Clique no workflow desejado → botão **▶**
-- Ou use a paleta de comandos (`Ctrl+Shift+P`) → `Act: Executar Workflow`
+- In the **Workflow Explorer**, expand the workflow list.
+- Select the desired workflow and click **Run**.
+- Or use the Command Palette (`Ctrl+Shift+P`) and choose **Act: Run Workflow**.
 
-O grafo visual abre automaticamente e atualiza em tempo real.
+The visual graph opens automatically and updates in real time.
 
----
+## Execution Graph
 
-## Grafo de execução
+The graph displays **jobs** as colored cards with their dependencies:
 
-O grafo mostra os **jobs** como cards coloridos com a dependência entre eles:
-
-| Cor | Status |
+| Color | Status |
 |---|---|
-| Cinza | Aguardando |
-| Azul pulsando | Em execução |
-| Verde | Concluído com sucesso |
-| Vermelho | Falhou |
-| Amarelo | Ignorado (skipped) |
+| Gray | Waiting |
+| Pulsing blue | Running |
+| Green | Completed successfully |
+| Red | Failed |
+| Yellow | Skipped |
 
-- **Clique no card** para expandir os steps internos
-- **Arraste** para reposicionar os cards no canvas
-- Os **conectores** mostram o fluxo de dependências (apenas arestas essenciais — sem redundâncias transitivas)
+- **Click a card** to expand its internal steps.
+- **Drag** cards to reposition them on the canvas.
+- **Connectors** show the dependency flow, with only essential edges.
 
----
+## Configure Secrets and Variables
 
-## Configurar secrets e variáveis
+Create these files at the repository root:
 
-Crie os arquivos na raiz do repositório:
-
-**`.secrets`** — secrets passados ao act:
+**`.secrets`** - secrets passed to act:
 ```
 GITHUB_TOKEN=ghp_...
 SONAR_TOKEN=sqa_...
 DOCKER_PASSWORD=...
 ```
 
-**`.env`** — variáveis de ambiente:
+**`.env`** - environment variables:
 ```
 ENV=local
 APP_URL=http://localhost:3000
 ```
 
-**`.actrc`** — configuração padrão do act:
+**`.actrc`** - default act configuration:
 ```
 --platform ubuntu-latest=catthehacker/ubuntu:act-latest
 --secret-file .secrets
 --env-file .env
 ```
 
-Ou use a UI: `Ctrl+Shift+P` → **Act: Gerenciar Variáveis de Ambiente**
+Or use the UI: `Ctrl+Shift+P` -> **Act: Manage Environment Variables**.
+
 > [!IMPORTANT]
-> ⚠️ Nunca versione o arquivo `.secrets`. Adicione ao `.gitignore`.
+> Never commit `.secrets`. Add it to `.gitignore`.
 
----
+## Run a Specific Job
 
-## Executar um job específico
+1. `Ctrl+Shift+P` -> **Act: Run Job**
+2. Select the workflow and then the desired job.
 
-1. `Ctrl+Shift+P` → **Act: Executar Job**
-2. Selecione o workflow e depois o job desejado
+## Validate a Workflow
 
----
+`Ctrl+Shift+P` -> **Act: Validate Workflow**
 
-## Validar workflow
+This checks YAML syntax before execution. It is also available as **CodeLens** directly in workflow `.yml` files.
 
-`Ctrl+Shift+P` → **Act: Validar Workflow**
+## Execution History
 
-Verifica erros de sintaxe no YAML antes de executar.
+`Ctrl+Shift+P` -> **Act: View History**
 
-Também disponível como **CodeLens** diretamente nos arquivos `.yml` de workflow.
+Lists previous executions with status, duration, and rerun actions.
 
----
+## Configure the `act` Path
 
-## Histórico de execuções
+If `act` is not on `PATH`:
 
-`Ctrl+Shift+P` → **Act: Ver Histórico**
+1. Open Settings with `Ctrl+,` and search for `actRunner.actPath`.
+2. Enter the full path, such as `/usr/local/bin/act` or `C:\tools\act.exe`.
 
-Lista execuções anteriores com status, duração e possibilidade de re-executar.
+Or use `Ctrl+Shift+P` -> **Act: Locate act Executable**.
 
----
+## Common Problems
 
-## Configurar caminho do `act`
-
-Se o `act` não estiver no PATH:
-
-1. `Ctrl+,` → Settings → pesquise `actRunner.actPath`
-2. Informe o caminho completo, ex.: `/usr/local/bin/act` ou `C:\tools\act.exe`
-
-Ou via `Ctrl+Shift+P` → **Act: Localizar Executável do act**
-
----
-
-## Problemas comuns
-
-| Problema | Solução |
+| Problem | Solution |
 |---|---|
-| `act: command not found` | Configure `actRunner.actPath` ou instale o act |
-| `Cannot connect to Docker` | Inicie o Docker Desktop / Rancher Desktop |
-| `ERRO: image not found` | Adicione `--pull=missing` no `.actrc` |
-| Workflow não aparece no explorador | Confirme que existem arquivos em `.github/workflows/` |
-| `Connect Timeout Error` em actions que chamam GitHub API | Adicione `github-token: ${{ github.token \|\| '' }}` na action |
-| Grafo não atualiza | Use `Act: Resetar Estado (forçar)` na paleta de comandos |
+| `act: command not found` | Configure `actRunner.actPath` or install act |
+| `Cannot connect to Docker` | Start Docker Desktop / Rancher Desktop |
+| `ERROR: image not found` | Add `--pull=missing` to `.actrc` |
+| Workflow does not appear in the explorer | Confirm that files exist in `.github/workflows/` |
+| `Connect Timeout Error` in actions calling the GitHub API | Add `github-token: ${{ github.token \|\| '' }}` to the action |
+| Graph does not update | Use **Act: Force Reset State** in the Command Palette |
 
----
+## Docker Desktop Alternatives
 
-## Alternativas ao Docker Desktop
+For corporate environments that cannot use Docker Desktop:
 
-Para ambientes corporativos que não podem usar Docker Desktop:
+`Ctrl+Shift+P` -> **Act: Docker Alternatives Guide**
 
-`Ctrl+Shift+P` → **Act: Guia Alternativas Docker**
-
-O guia cobre: Rancher Desktop, OrbStack, Podman Desktop e Colima.
+The guide covers Rancher Desktop, OrbStack, Podman Desktop, and Colima.

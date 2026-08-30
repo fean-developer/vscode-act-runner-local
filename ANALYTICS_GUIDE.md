@@ -1,77 +1,79 @@
 # Analytics - Act Visual Runner
 
-Esta tela consolida dados do histórico de execuções locais do Act Visual Runner. Ela ajuda a entender tempo de execução, frequência de falhas, consumo estimado de minutos e quais jobs estão impactando mais a duração dos workflows.
+[English](ANALYTICS_GUIDE.md) | [Português (Brasil)](ANALYTICS_GUIDE-pt-br.md)
 
-## Filtros
+This panel consolidates local execution history for Act Visual Runner. It helps you understand execution time, failure frequency, estimated minutes, and which jobs have the greatest impact on workflow duration.
+
+## Filters
 
 ### Timeframe
 
-Define o período analisado: últimos 7 dias, últimos 30 dias, últimos 90 dias ou todo o histórico disponível.
+Defines the analysis period: the last 7, 30, or 90 days, or all available history.
 
 ### Workflow
 
-Filtra os dados por workflow. Use quando quiser comparar apenas uma pipeline específica, por exemplo `CI/CD Pipeline`.
+Filters data by workflow. Use it to compare a single pipeline, such as `CI/CD Pipeline`.
 
 ### Job
 
-Filtra os dados por um job específico. Isso permite investigar tempos e falhas de uma etapa isolada do workflow, como build, tests ou deploy.
+Filters data by a specific job. This helps investigate the timing and failures of an individual workflow stage, such as build, tests, or deploy.
 
 ### Status
 
-Filtra execuções por resultado: sucesso, falha ou cancelamento.
+Filters executions by result: success, failure, or cancellation.
 
 ### Clear All Filters
 
-Remove os filtros de workflow, job e status, voltando para uma visão agregada do período selecionado.
+Removes workflow, job, and status filters and returns to an aggregate view of the selected period.
 
 ## Overview
 
 ### Average Duration
 
-Tempo médio de duração dos jobs ou execuções consideradas pelos filtros atuais. Serve para identificar se a pipeline está ficando mais lenta ao longo do tempo.
+Average duration of the jobs or executions selected by the current filters. Use it to identify whether a pipeline is becoming slower over time.
 
 ### Average Failure Rate
 
-Percentual médio de execuções com falha dentro do conjunto filtrado. Também mostra a contagem de falhas sobre o total analisado.
+Average percentage of failed executions in the filtered set. It also shows the failure count relative to the total analyzed.
 
 ### Total Minutes
 
-Soma dos minutos executados localmente no período filtrado. É útil para entender o volume total de processamento gasto nos workflows.
+Total minutes executed locally during the filtered period. This helps show the total processing volume spent on workflows.
 
 ### Billable Minutes
 
-Representa os minutos que seriam comparáveis a minutos cobrados em execução hospedada. No contexto local, é uma estimativa para comparação operacional.
+Represents minutes comparable to minutes billed for hosted execution. In the local context, this is an operational estimate.
 
 ### Est. Time Saved
 
-Estimativa de tempo economizado em relação a uma execução hospedada. O cálculo usa uma aproximação baseada no total de minutos registrados.
+Estimated time saved compared with hosted execution. The calculation is an approximation based on the total recorded minutes.
 
 ### Est. Cost Savings
 
-Estimativa de economia financeira baseada no tempo economizado. O valor é aproximado e serve como indicador de tendência, não como cobrança real.
+Estimated financial savings based on time saved. This approximate value is a trend indicator, not an actual charge.
 
 ## Charts
 
 ### Builds Over Time
 
-Mostra a quantidade de execuções por dia no período selecionado. Barras verdes representam execuções com sucesso e barras vermelhas indicam falhas. Ajuda a visualizar volume de uso e dias com maior incidência de erro.
+Shows the number of executions per day in the selected period. Green bars represent successful executions and red bars represent failures.
 
 ### Minutes Over Time
 
-Mostra os minutos consumidos por dia. É útil para identificar picos de uso, workflows mais pesados e períodos em que a execução local consumiu mais tempo.
+Shows minutes consumed per day. Use it to identify usage peaks, heavier workflows, and periods when local execution took longer.
 
 ### Success & Errors
 
-Resumo lateral dos gráficos. Exibe o total de execuções bem-sucedidas e com erro, ou o volume agregado relacionado ao gráfico selecionado.
+Side summary for the charts. Displays successful and failed execution totals, or the aggregate volume related to the selected chart.
 
 ## Job Duration Distribution
 
-Agrupa jobs por faixas de duração, como `0-1m`, `1-5m`, `5-10m` e assim por diante. Essa distribuição ajuda a entender se a maioria dos jobs é rápida ou se existe concentração em faixas mais longas.
+Groups jobs into duration ranges such as `0-1m`, `1-5m`, and `5-10m`. This distribution shows whether most jobs are fast or concentrated in longer ranges.
 
 ## Top 5 Slowest Jobs
 
-Lista os cinco jobs com maior duração média. Use essa seção para priorizar otimizações, como cache de dependências, paralelização, redução de steps ou ajustes em imagens Docker.
+Lists the five jobs with the longest average duration. Use this section to prioritize optimizations such as dependency caching, parallelization, fewer steps, or Docker image adjustments.
 
-## Observações Sobre os Dados
+## Notes About the Data
 
-Os dados vêm do histórico local salvo pela extensão. Se não houver histórico suficiente, alguns gráficos podem aparecer vazios ou com valores baixos. Quanto mais execuções forem registradas, mais útil fica a análise de tendência.
+The data comes from the local history stored by the extension. If there is not enough history, some charts may be empty or show low values. The more executions are recorded, the more useful the trend analysis becomes.

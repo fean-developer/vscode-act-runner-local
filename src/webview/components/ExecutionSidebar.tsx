@@ -1,21 +1,22 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useExecutionStore, type GraphNode, type NodeStatus } from '../store/executionStore';
+import { t } from '../i18n';
 
 // ─── Status helpers ───────────────────────────────────────────────────────────
 
 const STATUS_COLOR: Record<NodeStatus, string> = {
-  idle:    '#6e7681',
+  idle: '#6e7681',
   running: '#fb923c',
   success: '#3fb950',
-  failed:  '#f85149',
+  failed: '#f85149',
   skipped: '#8b949e',
 };
 
 const STATUS_ICON: Record<NodeStatus, string> = {
-  idle:    '○',
+  idle: '○',
   running: '◉',
   success: '✓',
-  failed:  '✕',
+  failed: '✕',
   skipped: '⏭',
 };
 
@@ -48,8 +49,10 @@ function StepRow({ step, isSelected, indent, onSelect }: StepRowProps) {
         borderBottom: '1px solid transparent',
       }}
     >
-      <span style={{ color: STATUS_COLOR[step.status], fontSize: 11, flexShrink: 0,
-        animation: step.status === 'running' ? 'actSpin 1.2s linear infinite' : undefined }}>
+      <span style={{
+        color: STATUS_COLOR[step.status], fontSize: 11, flexShrink: 0,
+        animation: step.status === 'running' ? 'actSpin 1.2s linear infinite' : undefined
+      }}>
         {STATUS_ICON[step.status]}
       </span>
       <span style={{ flex: 1, fontSize: 11, color: '#8b949e', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -89,8 +92,10 @@ function InnerJobRow({ job, steps, isExpanded, isSelected, filterJobId, filterSt
           {steps.length > 0 ? (isExpanded ? '▾' : '▸') : <span style={{ opacity: 0 }}>▸</span>}
         </button>
         {/* Status */}
-        <span style={{ color: STATUS_COLOR[job.status], fontSize: 11, flexShrink: 0,
-          animation: job.status === 'running' ? 'actSpin 1.2s linear infinite' : undefined }}>
+        <span style={{
+          color: STATUS_COLOR[job.status], fontSize: 11, flexShrink: 0,
+          animation: job.status === 'running' ? 'actSpin 1.2s linear infinite' : undefined
+        }}>
           {STATUS_ICON[job.status]}
         </span>
         {/* Label */}
@@ -120,22 +125,22 @@ function InnerJobRow({ job, steps, isExpanded, isSelected, filterJobId, filterSt
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function ExecutionSidebar() {
-  const nodes        = useExecutionStore(s => s.nodes);
-  const logFilter    = useExecutionStore(s => s.logFilter);
+  const nodes = useExecutionStore(s => s.nodes);
+  const logFilter = useExecutionStore(s => s.logFilter);
   const setLogFilter = useExecutionStore(s => s.setLogFilter);
-  const execution    = useExecutionStore(s => s.execution);
+  const execution = useExecutionStore(s => s.execution);
 
   // Sets separados por nível
   const [expandedOuter, setExpandedOuter] = useState<Set<string>>(new Set());
   const [expandedInner, setExpandedInner] = useState<Set<string>>(new Set());
 
   // Ref para detectar início de nova execução
-  const prevExecIdRef   = useRef<string | null>(null);
+  const prevExecIdRef = useRef<string | null>(null);
 
   // Nodes por tipo/nível
   const outerJobs = nodes.filter(n => n.type === 'job' && !n.parentId);
   const innerJobs = nodes.filter(n => n.type === 'job' && !!n.parentId);
-  const steps     = nodes.filter(n => n.type === 'step');
+  const steps = nodes.filter(n => n.type === 'step');
 
   // Agrupar inner jobs por outer job id
   // Usamos find(id OR label) porque o outerJobId do actRunner é o display name
@@ -193,16 +198,16 @@ export function ExecutionSidebar() {
     <div style={styles.container}>
       {/* Cabeçalho */}
       <div style={styles.header}>
-        <span>Execução</span>
+        <span>{t('Execution')}</span>
         {logFilter && (
-          <button style={styles.clearBtn} onClick={() => setLogFilter(null)}>✕ todos</button>
+          <button style={styles.clearBtn} onClick={() => setLogFilter(null)}>✕ {t('all')}</button>
         )}
       </div>
 
       <div style={styles.list}>
         {outerJobs.map(oj => {
-          const ijList    = innerByOuter.get(oj.id) ?? [];
-          const ojSteps   = stepsByJob.get(oj.id) ?? [];
+          const ijList = innerByOuter.get(oj.id) ?? [];
+          const ojSteps = stepsByJob.get(oj.id) ?? [];
           const isExpanded = expandedOuter.has(oj.id);
           // Outer job tem steps diretos (sem reusable) ou inner jobs (reusable)
           const hasChildren = ijList.length > 0 || ojSteps.length > 0;
@@ -214,8 +219,10 @@ export function ExecutionSidebar() {
                 <button onClick={() => toggleOuter(oj.id)} style={styles.chevronOuter} title={isExpanded ? 'Colapsar' : 'Expandir'}>
                   {hasChildren ? (isExpanded ? '▾' : '▸') : <span style={{ opacity: 0 }}>▸</span>}
                 </button>
-                <span style={{ color: STATUS_COLOR[oj.status], fontSize: 12, flexShrink: 0,
-                  animation: oj.status === 'running' ? 'actSpin 1.2s linear infinite' : undefined }}>
+                <span style={{
+                  color: STATUS_COLOR[oj.status], fontSize: 12, flexShrink: 0,
+                  animation: oj.status === 'running' ? 'actSpin 1.2s linear infinite' : undefined
+                }}>
                   {STATUS_ICON[oj.status]}
                 </span>
                 <span title={oj.label}

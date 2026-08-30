@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useExecutionStore, type WorkflowInputItem, type WorkflowInputValue } from '../store/executionStore';
+import { t } from '../i18n';
 
 type InputValue = WorkflowInputValue;
 type WebviewWindow = Window & { __vscode__?: { postMessage: (msg: unknown) => void } };
@@ -98,7 +99,7 @@ export function WorkflowRunDialog() {
         </div>
 
         <div style={styles.footer}>
-          <button type="button" style={styles.secondaryButton} onClick={closeWorkflowRunDialog}>Cancelar</button>
+          <button type="button" style={styles.secondaryButton} onClick={closeWorkflowRunDialog}>{t('Cancel')}</button>
           <button type="button" style={{ ...styles.runButton, ...(missingRequired ? styles.runButtonDisabled : {}) }} disabled={missingRequired} onClick={run}>
             Run workflow
           </button>
@@ -114,7 +115,7 @@ function InputField({ input, value, onChange }: { input: WorkflowInputItem; valu
       <span style={styles.fieldLabel}>{input.description || input.name}{input.required && <span style={styles.required}> *</span>}</span>
       {input.type === 'choice' && input.options?.length ? (
         <select style={styles.input} value={String(value ?? '')} onChange={(event) => onChange(event.target.value)}>
-          {!input.required && <option value="">Selecione...</option>}
+          {!input.required && <option value="">{t('Select...')}</option>}
           {input.options.map((option) => <option key={option} value={option}>{option}</option>)}
         </select>
       ) : input.type === 'boolean' ? (

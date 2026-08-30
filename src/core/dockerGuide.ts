@@ -1,5 +1,6 @@
 import { execSync } from 'child_process';
 import * as vscode from 'vscode';
+import { t } from '../i18n/messages';
 
 export class DockerGuide {
   detectRuntime(): string | null {
@@ -17,7 +18,7 @@ export class DockerGuide {
   showGuide(): void {
     const panel = vscode.window.createWebviewPanel(
       'actRunnerDockerGuide',
-      '🐳 Alternativas ao Docker Desktop',
+      t('🐳 Docker Desktop alternatives'),
       vscode.ViewColumn.One,
       { enableScripts: false }
     );
@@ -27,19 +28,19 @@ export class DockerGuide {
   async warnIfMissing(): Promise<void> {
     if (this.detectRuntime()) return;
     const choice = await vscode.window.showWarningMessage(
-      '⚠️ Nenhum runtime de containers detectado. O act requer Docker ou uma alternativa.',
-      'Ver Guia de Alternativas'
+      t('⚠️ No container runtime detected. act requires Docker or an alternative.'),
+      t('View alternatives guide')
     );
     if (choice) this.showGuide();
   }
 
   private getHtml(): string {
     return `<!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Alternativas ao Docker Desktop</title>
+  <title>Docker Desktop Alternatives</title>
   <style>
     body { font-family: var(--vscode-font-family, sans-serif); padding: 24px; max-width: 860px; margin: 0 auto; color: var(--vscode-foreground); }
     h1 { color: var(--vscode-textLink-foreground); }
@@ -52,40 +53,40 @@ export class DockerGuide {
   </style>
 </head>
 <body>
-  <h1>🐳 Alternativas Gratuitas ao Docker Desktop</h1>
-  <p>O Docker Desktop exige licença paga (<strong>Docker Business</strong>) para uso comercial em empresas com
-     mais de 250 funcionários ou receita acima de $10M. Abaixo estão alternativas gratuitas compatíveis com <code>act</code>.</p>
+    <h1>🐳 Free Docker Desktop Alternatives</h1>
+    <p>Docker Desktop requires a paid license (<strong>Docker Business</strong>) for commercial use by companies with
+      more than 250 employees or revenue above $10M. The alternatives below are free and compatible with <code>act</code>.</p>
 
-  <h2>🏆 Rancher Desktop <em>(Recomendado)</em></h2>
+  <h2>🏆 Rancher Desktop <em>(Recommended)</em></h2>
   <p><a href="https://rancherdesktop.io">rancherdesktop.io</a> — Windows, macOS, Linux — Apache 2.0</p>
-  <p>Interface gráfica similar ao Docker Desktop. Suporta <code>containerd</code> e <code>dockerd</code>.
-     Integra <code>kubectl</code> nativamente. Compatível com <code>act</code> sem configuração adicional.</p>
+    <p>Graphical interface similar to Docker Desktop. Supports <code>containerd</code> and <code>dockerd</code>.
+      Integrates <code>kubectl</code> natively. Compatible with <code>act</code> without additional configuration.</p>
 
   <h2>🦭 Podman Desktop</h2>
   <p><a href="https://podman-desktop.io">podman-desktop.io</a> — Windows, macOS, Linux — Apache 2.0</p>
-  <p>Rootless por padrão (mais seguro), compatível com API Docker, suportado pela Red Hat.</p>
-  <p>Configuração com act: <code>export DOCKER_HOST=unix:///run/user/$(id -u)/podman/podman.sock</code></p>
+  <p>Rootless by default (more secure), compatible with the Docker API, and supported by Red Hat.</p>
+  <p>Configure with act: <code>export DOCKER_HOST=unix:///run/user/$(id -u)/podman/podman.sock</code></p>
 
   <h2>🍺 Colima (macOS / Linux)</h2>
   <p><a href="https://github.com/abiosoft/colima">github.com/abiosoft/colima</a> — MIT</p>
-  <p>Leve e fácil. Instalar: <code>brew install colima docker &amp;&amp; colima start</code></p>
+  <p>Lightweight and easy to use. Install: <code>brew install colima docker &amp;&amp; colima start</code></p>
 
   <h2>🚀 OrbStack (macOS)</h2>
-  <p><a href="https://orbstack.dev">orbstack.dev</a> — Muito mais rápido que Docker Desktop no Mac.</p>
-  <p>Gratuito para uso pessoal — verificar termos para uso comercial.</p>
+  <p><a href="https://orbstack.dev">orbstack.dev</a> — Much faster than Docker Desktop on Mac.</p>
+  <p>Free for personal use; check the terms for commercial use.</p>
 
-  <h2>Comparativo</h2>
+  <h2>Comparison</h2>
   <table>
-    <tr><th>Alternativa</th><th>Windows</th><th>macOS</th><th>Linux</th><th>UI Gráfica</th><th>Rootless</th><th>Gratuito</th></tr>
+    <tr><th>Alternative</th><th>Windows</th><th>macOS</th><th>Linux</th><th>Graphical UI</th><th>Rootless</th><th>Free</th></tr>
     <tr><td>Rancher Desktop</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td></tr>
     <tr><td>Podman Desktop</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td></tr>
     <tr><td>Colima</td><td>❌</td><td>✅</td><td>✅</td><td>❌</td><td>✅</td><td>✅</td></tr>
     <tr><td>OrbStack</td><td>❌</td><td>✅</td><td>❌</td><td>✅</td><td>✅</td><td>✅*</td></tr>
   </table>
-  <p><small>* OrbStack: gratuito para uso pessoal.</small></p>
+  <p><small>* OrbStack: free for personal use.</small></p>
 
-  <h2>Configuração no .actrc</h2>
-  <p>Após instalar uma das alternativas, adicione ao <code>.actrc</code>:</p>
+  <h2>.actrc Configuration</h2>
+  <p>After installing one of the alternatives, add this to <code>.actrc</code>:</p>
   <pre><code>-P ubuntu-latest=catthehacker/ubuntu:act-latest</code></pre>
 </body>
 </html>`;
