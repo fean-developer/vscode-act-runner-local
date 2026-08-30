@@ -46,6 +46,12 @@ This extension makes testing GitHub Actions locally more productive by providing
 2. Search for **Act/Run - GitHub Actions Visual locally**.
 3. Select the extension and click **Install**.
 
+### Install from GitHub Releases
+
+Download the `.vsix` asset from the [latest GitHub Release](https://github.com/fean-developer/vscode-act-runner-local/releases), then open the Extensions view, select `...` -> **Install from VSIX...**, and choose the downloaded file. From a terminal, use `code --install-extension act-visual-runner-<version>.vsix`.
+
+See [the release process](docs/RELEASE_PROCESS.md) for maintainer instructions.
+
 ## Quick Start
 
 1. Open a repository containing workflows in `.github/workflows/`.

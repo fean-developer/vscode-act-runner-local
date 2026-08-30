@@ -1,0 +1,19 @@
+node_modules/**
+src/**
+tests/**
+**/*.test.ts
+**/*.test.tsx
+**/*.map
+.github/**
+.vscode/**
+scripts/**
+tsconfig*.json
+webpack*.js
+jest.config.ts
+package-lock.json
+*.vsix
+
+# Repository-only documentation
+ANALYTICS_GUIDE.md
+ANALYTICS_GUIDE-pt-br.md
+CHANGELOG-pt-br.md

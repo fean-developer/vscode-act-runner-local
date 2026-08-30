@@ -26,3 +26,6 @@ dist/
 .env.local
 .env.production
 .github/**
+!.github/
+!.github/workflows/
+!.github/workflows/release.yml
