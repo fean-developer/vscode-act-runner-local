@@ -9,6 +9,7 @@ import type {
   WorkflowNode,
   WorkflowEdge,
 } from '../types/workflow.types';
+import { t } from '../i18n/messages';
 
 export class WorkflowParser {
   parse(filePath: string): WorkflowDefinition {
@@ -16,7 +17,7 @@ export class WorkflowParser {
     const raw = yaml.load(content) as Record<string, unknown>;
 
     if (!raw || typeof raw !== 'object') {
-      throw new Error(`YAML inválido em: ${filePath}`);
+      throw new Error(t('Invalid YAML in: {0}', filePath));
     }
 
     const rawJobs = (raw.jobs ?? {}) as Record<string, unknown>;

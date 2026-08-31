@@ -5,6 +5,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { eventBus } from './eventBus';
 import type { ExecutionOptions } from '../types/execution.types';
+import { t } from '../i18n/messages';
 import type { LogPayload } from '../types/events.types';
 
 type LogLevel = 'info' | 'warn' | 'error' | 'debug' | 'notice';
@@ -278,7 +279,7 @@ export class ActRunner {
 
   async run(executionId: string, options: ExecutionOptions): Promise<void> {
     const workspaceRoot = options.workspaceRoot ?? vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-    if (!workspaceRoot) throw new Error('Nenhum projeto selecionado. Use "Selecionar Projeto" na sidebar.');
+    if (!workspaceRoot) throw new Error(t('No project selected. Use "Select Project" in the sidebar.'));
 
     // actCwd: diretório de onde o act será invocado (pode ser pai do projeto para reusable workflows)
     const actCwd = options.actCwd ?? workspaceRoot;
@@ -353,7 +354,7 @@ export class ActRunner {
           },
         });
         if (code === 0) resolve();
-        else reject(new Error(`act encerrou com código ${code}`));
+        else reject(new Error(t('act exited with code {0}', code ?? 'unknown')));
       });
 
       this.activeProcess.on('error', (err: Error) => {

@@ -1,5 +1,14 @@
 # Changelog
 
+[English](CHANGELOG.md) | [Português (Brasil)](CHANGELOG-pt-br.md)
+
+## v2.10.34
+
+### Added
+
+- Added English localization for the extension, with Brazilian Portuguese retained as an available language.
+- To switch languages, open the Command Palette with `Ctrl+Shift+P`, run **Configure Display Language**, choose `en` for English or `pt-br` for Portuguese (Brazil), and reload VS Code.
+
 ## v2.10.33
 
 ### Corrigido

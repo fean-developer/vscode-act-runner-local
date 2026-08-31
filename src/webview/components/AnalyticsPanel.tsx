@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useExecutionStore } from '../store/executionStore';
+import { t } from '../i18n';
 import type { ExecutionRecord, JobResult } from '../../types/execution.types';
 
 type Timeframe = '7' | '30' | '90' | 'all';
@@ -80,7 +81,7 @@ export function AnalyticsPanel() {
           {jobNames.map((item) => <option key={item} value={item}>{item}</option>)}
         </select>
         <select value={status} onChange={(event) => setStatus(event.target.value)} style={styles.filterSelect}>
-          <option value="all">Status</option>
+          <option value="all">{t('Status')}</option>
           <option value="success">Success</option>
           <option value="failed">Failed</option>
           <option value="cancelled">Cancelled</option>
@@ -89,7 +90,7 @@ export function AnalyticsPanel() {
       </div>
 
       {history.length === 0 ? (
-        <div style={styles.empty}>Nenhum histórico disponível ainda. Execute workflows para alimentar o Analytics.</div>
+        <div style={styles.empty}>{t('No history available yet. Run workflows to populate Analytics.')}</div>
       ) : (
         <div style={styles.content}>
           <section>
@@ -135,7 +136,7 @@ export function AnalyticsPanel() {
                     <div style={styles.slowestDuration}>{formatDuration(item.averageDuration)}</div>
                     <div style={styles.slowestSubRight}>avg duration</div>
                   </div>
-                )) : <div style={styles.muted}>Sem jobs com duração registrada.</div>}
+                )) : <div style={styles.muted}>{t('No jobs with recorded duration.')}</div>}
               </div>
             </div>
           </section>

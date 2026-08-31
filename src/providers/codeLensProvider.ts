@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { workflowParser } from '../core/workflowParser';
+import { t } from '../i18n/messages';
 
 export class WorkflowCodeLensProvider implements vscode.CodeLensProvider {
   provideCodeLenses(document: vscode.TextDocument): vscode.CodeLens[] {
@@ -10,7 +11,7 @@ export class WorkflowCodeLensProvider implements vscode.CodeLensProvider {
     const top = new vscode.Range(0, 0, 0, 0);
     const lenses: vscode.CodeLens[] = [
       new vscode.CodeLens(top, {
-        title: '▶ Executar Workflow',
+        title: `▶ ${t('Run Workflow')}`,
         command: 'actRunner.runWorkflow',
         arguments: [document.uri.fsPath],
       }),
@@ -25,7 +26,7 @@ export class WorkflowCodeLensProvider implements vscode.CodeLensProvider {
         arguments: [document.uri.fsPath],
       }),
       new vscode.CodeLens(top, {
-        title: '✅ Validar',
+        title: `✅ ${t('Validate')}`,
         command: 'actRunner.validateWorkflow',
         arguments: [document.uri.fsPath],
       }),
@@ -39,7 +40,7 @@ export class WorkflowCodeLensProvider implements vscode.CodeLensProvider {
         if (lineIdx >= 0) {
           lenses.push(
             new vscode.CodeLens(new vscode.Range(lineIdx, 0, lineIdx, 0), {
-              title: `▶ Executar Job: ${jobId}`,
+              title: `▶ ${t('Run Job')}: ${jobId}`,
               command: 'actRunner.runJob',
               arguments: [document.uri.fsPath, jobId],
             })

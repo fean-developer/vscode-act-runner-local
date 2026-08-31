@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { t } from '../i18n/messages';
 
 export interface EnvEntry {
   key: string;
@@ -139,15 +140,15 @@ export class EnvManager {
     if (missing.length === 0) return;
 
     const choice = await vscode.window.showWarningMessage(
-      `⚠️ "${missing.join(', ')}" não está no .gitignore. Risco de commitar secrets!`,
-      'Adicionar ao .gitignore',
-      'Ignorar'
+      t('⚠️ "{0}" is not in .gitignore. Secrets may be committed!', missing.join(', ')),
+      t('Add to .gitignore'),
+      t('Ignore')
     );
 
-    if (choice === 'Adicionar ao .gitignore') {
+    if (choice === t('Add to .gitignore')) {
       content += `\n# Act Runner — secrets locais\n${missing.join('\n')}\n`;
       fs.writeFileSync(gitignorePath, content, 'utf-8');
-      vscode.window.showInformationMessage('✅ .gitignore atualizado com sucesso.');
+      vscode.window.showInformationMessage(t('✅ .gitignore updated successfully.'));
     }
   }
 }

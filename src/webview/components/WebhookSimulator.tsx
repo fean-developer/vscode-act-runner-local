@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { t } from '../i18n';
 
 /**
  * Simulador de eventos webhook com editor JSON.
@@ -36,7 +37,7 @@ export function WebhookSimulator() {
       });
       setError(null);
     } catch (e) {
-      setError('JSON inválido — corrija o payload antes de simular.');
+      setError(t('Invalid JSON - fix the payload before simulating.'));
     }
   };
 

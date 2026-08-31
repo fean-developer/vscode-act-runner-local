@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useExecutionStore, type WorkflowListItem } from '../store/executionStore';
+import { t } from '../i18n';
 
 export function WorkflowLauncherSidebar() {
   const { workflows, selectedWorkflowPath, repository, setSelectedWorkflowPath, openWorkflowRunDialog } = useExecutionStore();
@@ -26,7 +27,7 @@ export function WorkflowLauncherSidebar() {
           type="button"
           style={styles.toggleCollapsedBtn}
           onClick={() => setIsOpen(true)}
-          title="Abrir sidebar de workflows"
+          title={t('Open workflow sidebar')}
         >
           ▸
         </button>
@@ -40,15 +41,15 @@ export function WorkflowLauncherSidebar() {
         type="button"
         style={styles.toggleOpenBtn}
         onClick={() => setIsOpen(false)}
-        title="Fechar sidebar de workflows"
+        title={t('Close workflow sidebar')}
       >
         ◂
       </button>
       <div style={styles.repoBox}>
-        <div style={styles.repoLabel}>Repositório</div>
-        <button type="button" style={styles.repoButton} onClick={selectRepository} title={repository?.root ?? 'Selecionar repositório'}>
+        <div style={styles.repoLabel}>{t('Repository')}</div>
+        <button type="button" style={styles.repoButton} onClick={selectRepository} title={repository?.root ?? t('Select repository')}>
           <span style={styles.repoIcon}>📁</span>
-          <span style={styles.repoText}>{repository?.name ?? 'Selecionar repositório'}</span>
+          <span style={styles.repoText}>{repository?.name ?? t('Select repository')}</span>
         </button>
       </div>
       <div style={styles.header}>
@@ -58,8 +59,8 @@ export function WorkflowLauncherSidebar() {
       <div style={styles.list}>
         {workflows.length === 0 ? (
           <div style={styles.empty}>
-            Nenhum workflow encontrado em .github/workflows.
-            <button type="button" style={styles.emptyButton} onClick={selectRepository}>Selecionar repositório</button>
+            {t('No workflow found in .github/workflows.')}
+            <button type="button" style={styles.emptyButton} onClick={selectRepository}>{t('Select repository')}</button>
           </div>
         ) : workflows.map((workflow) => {
           const active = selectedWorkflowPath === workflow.filePath;
@@ -67,7 +68,7 @@ export function WorkflowLauncherSidebar() {
             <button
               key={workflow.filePath}
               type="button"
-              title={workflow.valid ? `Executar ${workflow.fileName}${workflow.inputs.length ? ' com inputs' : ''}` : workflow.error}
+              title={workflow.valid ? `${t('Run')} ${workflow.fileName}${workflow.inputs.length ? ` ${t('with inputs')}` : ''}` : workflow.error}
               style={{
                 ...styles.item,
                 ...(active ? styles.itemActive : {}),

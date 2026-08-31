@@ -1,7 +1,7 @@
 {
   "name": "act-visual-runner",
   "displayName": "Act/Run - GitHub Actions Visual locally",
-  "description": "Execute GitHub Actions localmente com interface visual estilo n8n usando nektos/act",
+  "description": "%extension.description%",
   "version": "2.10.33",
   "publisher": "fean-developer",
   "engines": {
@@ -32,64 +32,64 @@
     "commands": [
       {
         "command": "actRunner.showMenu",
-        "title": "Act: Abrir Menu Principal"
+        "title": "%command.showMenu%"
       },
       {
         "command": "actRunner.runWorkflow",
-        "title": "Act: Executar Workflow",
+        "title": "%command.runWorkflow%",
         "icon": "$(run)"
       },
       {
         "command": "actRunner.runJob",
-        "title": "Act: Executar Job",
+        "title": "%command.runJob%",
         "icon": "$(run)"
       },
       {
         "command": "actRunner.listJobs",
-        "title": "Act: Listar Jobs"
+        "title": "%command.listJobs%"
       },
       {
         "command": "actRunner.stopExecution",
-        "title": "Act: Parar Execução"
+        "title": "%command.stopExecution%"
       },
       {
         "command": "actRunner.forceReset",
-        "title": "Act: Resetar Estado (forçar)"
+        "title": "%command.forceReset%"
       },
       {
         "command": "actRunner.validateWorkflow",
-        "title": "Act: Validar Workflow",
+        "title": "%command.validateWorkflow%",
         "icon": "$(check)"
       },
       {
         "command": "actRunner.manageEnv",
-        "title": "Act: Gerenciar Variáveis de Ambiente"
+        "title": "%command.manageEnv%"
       },
       {
         "command": "actRunner.viewHistory",
-        "title": "Act: Ver Histórico"
+        "title": "%command.viewHistory%"
       },
       {
         "command": "actRunner.dockerGuide",
-        "title": "Act: Guia Alternativas Docker"
+        "title": "%command.dockerGuide%"
       },
       {
         "command": "actRunner.securityGuide",
-        "title": "Act: Boas Práticas de Segurança"
+        "title": "%command.securityGuide%"
       },
       {
         "command": "actRunner.refreshExplorer",
-        "title": "Act: Atualizar Explorador",
+        "title": "%command.refreshExplorer%",
         "icon": "$(refresh)"
       },
       {
         "command": "actRunner.selectProject",
-        "title": "Act: Selecionar Projeto",
+        "title": "%command.selectProject%",
         "icon": "$(folder-opened)"
       },
       {
         "command": "actRunner.locateAct",
-        "title": "Act: Localizar Executável do act",
+        "title": "%command.locateAct%",
         "icon": "$(search)"
       }
     ],
@@ -97,7 +97,7 @@
       "activitybar": [
         {
           "id": "actRunner",
-          "title": "ACT Runner",
+          "title": "%viewContainer.title%",
           "icon": "resources/icon.svg"
         }
       ]
@@ -106,7 +106,7 @@
       "actRunner": [
         {
           "id": "actRunner.workflowExplorer",
-          "name": "Workflows",
+          "name": "%view.workflows%",
           "icon": "resources/icon.svg"
         }
       ]
@@ -188,43 +188,43 @@
       ]
     },
     "configuration": {
-      "title": "Act/Run - GitHub Actions Visual locally",
+      "title": "%configuration.title%",
       "properties": {
         "actRunner.actPath": {
           "type": "string",
           "default": "act",
-          "description": "Caminho para o executável do act (deixe 'act' se estiver no PATH)"
+          "description": "%configuration.actPath%"
         },
         "actRunner.defaultImage": {
           "type": "string",
           "default": "catthehacker/ubuntu:act-latest",
-          "description": "Imagem Docker padrão para execução local"
+          "description": "%configuration.defaultImage%"
         },
         "actRunner.enableCodeLens": {
           "type": "boolean",
           "default": true,
-          "description": "Exibir botões CodeLens nos arquivos de workflow YAML"
+          "description": "%configuration.enableCodeLens%"
         },
         "actRunner.maxHistoryRecords": {
           "type": "number",
           "default": 40,
           "maximum": 40,
-          "description": "Número máximo de registros no histórico de execuções (limitado a 40 para manter a performance)"
+          "description": "%configuration.maxHistoryRecords%"
         },
         "actRunner.secretsFile": {
           "type": "string",
           "default": ".secrets",
-          "description": "Caminho para o arquivo de secrets (relativo ao workspace)"
+          "description": "%configuration.secretsFile%"
         },
         "actRunner.envFile": {
           "type": "string",
           "default": ".env",
-          "description": "Caminho para o arquivo de variáveis de ambiente (relativo ao workspace)"
+          "description": "%configuration.envFile%"
         },
         "actRunner.varFile": {
           "type": "string",
           "default": ".vars",
-          "description": "Caminho para o arquivo de vars do GitHub Actions usado pelo act --var-file (relativo ao workspace)"
+          "description": "%configuration.varFile%"
         }
       }
     }

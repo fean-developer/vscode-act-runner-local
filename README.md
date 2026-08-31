@@ -1,90 +1,89 @@
-# Act/Run - GitHub Actions Visual locally - Extensão VS Code
+# Act/Run - GitHub Actions Visual locally - VS Code Extension
 
 [![Visual Studio Marketplace Version](https://vsmarketplacebadges.dev/version/fean-developer.act-visual-runner.svg)](https://img.shields.io/visual-studio-marketplace/v/fean-developer.act-visual-runner?style=flat-square&label=Visual%20Studio%20Marketplace)
 [![Release](https://img.shields.io/github/v/release/fean-developer/vscode-act-runner-local?style=flat-square&label=release)](https://flat.badgen.net/github/release/fean-developer/act-visual-runner)
 [![License](https://img.shields.io/github/license/fean-developer/vscode-act-runner-local?style=flat-square)](LICENSE)
 
-Extensão VSCode que executa workflows GitHub Actions localmente usando [nektos/act](https://github.com/nektos/act) e visualiza a execução em tempo real num grafo interativo estilo n8n.
+[English](README.md) | [Português (Brasil)](README-pt-br.md)
 
-![gif](images/vscode-act-ext.gif)
+VS Code extension that runs GitHub Actions workflows locally using [nektos/act](https://github.com/nektos/act) and visualizes execution in real time through an interactive n8n-style graph.
 
-### Nova visão
- - Sidebar interna na UI
- - Seleção de repositorio agora abre na coluna principal do editor para uma experiência de UI mais expandida
----
-<img src="images/image-new-1.png" alt="Description" width="1024">
+![Extension preview](images/vscode-act-ext.gif)
 
----
+### New Layout
+
+- Integrated sidebar UI.
+- Repository selection opens in the main editor column for a more spacious experience.
+
+<img src="images/image-new-1.png" alt="Act Runner workflow view" width="1024">
 
 ### Summary
- - Agora opção de ver o Summary o mesmo que aparece no Github
 
-<img src="images/image-summary.png" alt="Description" width="1024">
+- View the same workflow summary produced by GitHub Actions.
 
----
+<img src="images/image-summary.png" alt="Workflow summary" width="1024">
 
-### Analytcs
- - Agora dispõe de um painel analytics baseado no historico de execuçoes locais
+### Analytics
 
-<img src="images/image-analytic.png" alt="Description" width="1024">
+- Review analytics based on local execution history.
 
----
+<img src="images/image-analytic.png" alt="Execution analytics" width="1024">
 
-A finalidade dessa extensão é transformar a experiência de testar GitHub Actions localmente, oferecendo uma interface visual intuitiva e em tempo real que torna o desenvolvimento mais produtivo e satisfatório.
+This extension makes testing GitHub Actions locally more productive by providing an intuitive visual interface with real-time execution feedback.
 
 > [!IMPORTANT]
-> Essa extensao executa somente com [nektos/act](https://github.com/nektos/act) instalado
+> This extension requires [nektos/act](https://github.com/nektos/act) to be installed.
 
-## Pré-requisitos obrigatórios
+## Requirements
 
-- [nektos/act](https://github.com/nektos/act) instalado e acessível no PATH (ou configurado via `actRunner.actPath`)
-- Docker (ou alternativa compatível como Podman, Rancher Desktop, OrbStack)
-- VSCode 1.85+
+- [nektos/act](https://github.com/nektos/act) installed and available on `PATH`, or configured through `actRunner.actPath`.
+- Docker or a compatible alternative such as Podman, Rancher Desktop, or OrbStack.
+- VS Code 1.85 or newer.
 
-## Instalação
+## Installation
 
- - Você acessa [ Visual Studio   |   Marketplace ](https://marketplace.visualstudio.com/) seleciona a opção
- Visual Studio Code.
- - Digite o nome da extensão "Act/Run - GitHub Actions Visual locally"
- - Selecione a extensão e clique em install
- - Automaticamente sera instalada no seu Vs Code
+1. Open the [Visual Studio Code Marketplace](https://marketplace.visualstudio.com/).
+2. Search for **Act/Run - GitHub Actions Visual locally**.
+3. Select the extension and click **Install**.
 
-## Uso rápido
+## Quick Start
 
-1. Abra um repositório que contenha workflows em `.github/workflows/`
-2. Clique no ícone **Act Runner** na barra de atividades (lado esquerdo)
-3. Selecione um workflow no Explorador → clique **▶ Executar**
-4. O grafo abre automaticamente e exibe o status de cada job/step em tempo real
+1. Open a repository containing workflows in `.github/workflows/`.
+2. Click the **ACT Runner** icon in the Activity Bar.
+3. Select a workflow in the explorer and click **Run**.
+4. The graph opens automatically and displays each job and step status in real time.
 
-## Comandos disponíveis
+## Available Commands
 
-| Comando | Descrição |
+| Command | Description |
 |---|---|
-| `Act: Executar Workflow` | Executa um workflow completo |
-| `Act: Quick Run` | Executa o workflow padrão sem prompts |
-| `Act: Executar Job` | Executa um job específico |
-| `Act: Parar Execução` | Cancela a execução em andamento |
-| `Act: Validar Workflow` | Valida o YAML do workflow |
-| `Act: Ver Histórico` | Exibe execuções anteriores |
-| `Act: Guia Alternativas Docker` | Guia de alternativas gratuitas ao Docker Desktop |
+| `Act: Run Workflow` | Run a complete workflow |
+| `Act: Quick Run` | Run the default workflow without prompts |
+| `Act: Run Job` | Run a specific job |
+| `Act: Stop Execution` | Cancel the current execution |
+| `Act: Validate Workflow` | Validate workflow YAML |
+| `Act: View History` | View previous executions |
+| `Act: Docker Alternatives Guide` | View free alternatives to Docker Desktop |
 
-## Configuração
+## Configuration
 
-| Setting | Descrição | Padrão |
+| Setting | Description | Default |
 |---|---|---|
-| `actRunner.actPath` | Caminho do executável `act` | `act` (PATH) |
-| `actRunner.defaultPlatform` | Plataforma Docker padrão | `ubuntu-latest=catthehacker/ubuntu:act-latest` |
+| `actRunner.actPath` | Path to the `act` executable | `act` (`PATH`) |
+| `actRunner.defaultImage` | Default Docker image | `catthehacker/ubuntu:act-latest` |
 
-Configure via **Preferences → Settings → Act Visual Runner**.
+Configure the extension through **Preferences -> Settings -> Act Visual Runner**.
 
-## Arquivos de configuração
+## Configuration Files
 
-Crie na raiz do projeto:
+Optionally, act can be configured using these configuration files:
 
-- **`.actrc`** — flags padrão do act (ex.: `--platform ubuntu-latest=catthehacker/ubuntu:act-latest`)
-- **`.secrets`** — secrets em formato `CHAVE=valor`
-- **`.env`** — variáveis de ambiente
-# Exemplo .actrc
+- **`.actrc`** - default act flags, for example `--platform ubuntu-latest=catthehacker/ubuntu:act-latest`.
+- **`.secrets`** - secrets in `KEY=value` format.
+- **`.env`** - environment variables.
+
+### Example `.actrc`
+
 ```bash
 # ─────────────────────────────────────────────────────────────────────────────
 # nektos/act default flags — must live at fean-projects/ root (where act is run).
@@ -118,6 +117,8 @@ Crie na raiz do projeto:
 
 ## User Guide
 
-Veja o arquivo [USER GUIDE](USER_GUIDE.md) incluído na extensão para instruções detalhadas de uso.
+See the [English user guide](USER_GUIDE.md) or the [Portuguese user guide](USER_GUIDE-pt-br.md) for detailed usage instructions.
+
+## License
 
 MIT

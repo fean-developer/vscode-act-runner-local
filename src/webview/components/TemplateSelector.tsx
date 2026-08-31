@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { t } from '../i18n';
 
 /**
  * Seletor de templates de workflow CI/CD e scripts de automação.
@@ -14,18 +15,18 @@ interface Template {
 }
 
 const WORKFLOW_TEMPLATES: Template[] = [
-  { id: 'ci-nodejs', name: 'CI — Node.js', description: 'Build, lint e testes para projetos Node.js', category: 'workflow' },
-  { id: 'ci-python', name: 'CI — Python', description: 'Build e testes com pytest para projetos Python', category: 'workflow' },
-  { id: 'cd-docker', name: 'CD — Docker', description: 'Build e push de imagem Docker para registry', category: 'workflow' },
-  { id: 'release-auto', name: 'Release Automático', description: 'Release semântico com changelog automatizado', category: 'workflow' },
-  { id: 'lint', name: 'Lint & Format', description: 'Verificação de qualidade de código', category: 'workflow' },
+  { id: 'ci-nodejs', name: 'CI — Node.js', description: 'Build, lint, and tests for Node.js projects', category: 'workflow' },
+  { id: 'ci-python', name: 'CI — Python', description: 'Build and pytest tests for Python projects', category: 'workflow' },
+  { id: 'cd-docker', name: 'CD — Docker', description: 'Build and push a Docker image to a registry', category: 'workflow' },
+  { id: 'release-auto', name: 'Automated Release', description: 'Semantic release with an automated changelog', category: 'workflow' },
+  { id: 'lint', name: 'Lint & Format', description: 'Code quality verification', category: 'workflow' },
 ];
 
 const SCRIPT_TEMPLATES: Template[] = [
   { id: 'bash-deploy', name: 'Deploy Bash', description: 'Script de deploy genérico em Bash', category: 'script', language: 'bash' },
-  { id: 'ps-azure', name: 'Azure PowerShell', description: 'Deploy de recursos Azure em PowerShell', category: 'script', language: 'powershell' },
-  { id: 'python-api', name: 'API Python', description: 'Script de integração com APIs REST em Python', category: 'script', language: 'python' },
-  { id: 'bicep-appservice', name: 'Bicep App Service', description: 'Infraestrutura como código para Azure App Service', category: 'script', language: 'bicep' },
+  { id: 'ps-azure', name: 'Azure PowerShell', description: 'Deploy Azure resources with PowerShell', category: 'script', language: 'powershell' },
+  { id: 'python-api', name: 'Python API', description: 'Python integration script for REST APIs', category: 'script', language: 'python' },
+  { id: 'bicep-appservice', name: 'Bicep App Service', description: 'Infrastructure as code for Azure App Service', category: 'script', language: 'bicep' },
 ];
 
 export function TemplateSelector() {
@@ -43,25 +44,25 @@ export function TemplateSelector() {
         <span>Templates</span>
         <div style={styles.toggle}>
           <button style={{ ...styles.btn, ...(section === 'workflow' ? styles.btnActive : {}) }} onClick={() => setSection('workflow')}>
-            📋 Workflows
+            📋 {t('Workflows')}
           </button>
           <button style={{ ...styles.btn, ...(section === 'script' ? styles.btnActive : {}) }} onClick={() => setSection('script')}>
-            📜 Scripts
+            📜 {t('Scripts')}
           </button>
         </div>
       </div>
       <div style={styles.grid}>
-        {templates.map((t) => (
+        {templates.map((template) => (
           <div
-            key={t.id}
-            style={{ ...styles.card, ...(selected === t.id ? styles.cardSelected : {}) }}
-            onClick={() => setSelected(t.id)}
+            key={template.id}
+            style={{ ...styles.card, ...(selected === template.id ? styles.cardSelected : {}) }}
+            onClick={() => setSelected(template.id)}
           >
-            <div style={styles.cardName}>{t.name}</div>
-            <div style={styles.cardDesc}>{t.description}</div>
-            {t.language && <div style={styles.tag}>{t.language}</div>}
-            {selected === t.id && (
-              <button style={styles.applyBtn} onClick={() => apply(t.id)}>Aplicar Template</button>
+            <div style={styles.cardName}>{template.name}</div>
+            <div style={styles.cardDesc}>{template.description}</div>
+            {template.language && <div style={styles.tag}>{template.language}</div>}
+            {selected === template.id && (
+              <button style={styles.applyBtn} onClick={() => apply(template.id)}>{t('Apply template')}</button>
             )}
           </div>
         ))}

@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { useExecutionStore, type NodeStatus } from '../store/executionStore';
 import { WorkflowGraph } from './WorkflowGraph';
 import { RunSummaryHeader } from './RunSummaryHeader';
+import { t } from '../i18n';
 
 // ─── Parser Markdown leve (browser-safe, zero dependências) ──────────────────
 
@@ -214,7 +215,7 @@ export function SummaryPanel() {
               <span style={styles.sidebarJobLabel}>{job.label}</span>
             </div>
           )) : (
-            <div style={styles.sidebarEmpty}>Nenhum job carregado</div>
+            <div style={styles.sidebarEmpty}>{t('No job loaded')}</div>
           )}
         </div>
       </aside>
@@ -244,7 +245,7 @@ export function SummaryPanel() {
             />
           ) : (
             <div style={{ ...styles.body, ...styles.empty }}>
-              Nenhum GITHUB_STEP_SUMMARY detectado nesta execução.
+              {t('No GITHUB_STEP_SUMMARY detected in this execution.')}
             </div>
           )}
         </section>

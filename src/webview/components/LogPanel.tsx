@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useExecutionStore } from '../store/executionStore';
+import { t } from '../i18n';
 
 const ANSI_SGR_RE = /\x1b\[([0-9;]*)m/g;
 const HTML_TAG_RE = /<\/?[a-z][\s\S]*>/i;
@@ -219,19 +220,19 @@ export function LogPanel({ height }: { height: number }) {
   // Filtra logs pelo job/step selecionado no grafo
   const filteredLogs = logFilter
     ? logs.filter((l) => {
-        if (l.jobId !== logFilter.jobId) return false;
-        if (!logFilter.stepLabel) return true;
-        return (
-          l.stepId === logFilter.stepLabel ||
-          (l.stepId?.startsWith(logFilter.stepLabel + '/') ?? false)
-        );
-      })
+      if (l.jobId !== logFilter.jobId) return false;
+      if (!logFilter.stepLabel) return true;
+      return (
+        l.stepId === logFilter.stepLabel ||
+        (l.stepId?.startsWith(logFilter.stepLabel + '/') ?? false)
+      );
+    })
     : logs;
 
   // Agrupa linhas entre ::group:: e ::endgroup:: em seções colapsáveis
   type LogLine = typeof filteredLogs[number];
-  interface FlatItem   { type: 'line';  log: LogLine }
-  interface GroupItem  { type: 'group'; id: string; title: string; lines: LogLine[] }
+  interface FlatItem { type: 'line'; log: LogLine }
+  interface GroupItem { type: 'group'; id: string; title: string; lines: LogLine[] }
   type DisplayItem = FlatItem | GroupItem;
 
   const displayItems = useMemo<DisplayItem[]>(() => {
@@ -241,7 +242,7 @@ export function LogPanel({ height }: { height: number }) {
     filteredLogs.forEach((log, idx) => {
       const logWithoutAnsi = stripAnsi(log.line);
       const groupStart = logWithoutAnsi.match(/::group::(.+)/);
-      const groupEnd   = logWithoutAnsi.includes('::endgroup::');
+      const groupEnd = logWithoutAnsi.includes('::endgroup::');
 
       if (groupStart) {
         // Fechar grupo anterior se ainda estiver aberto
@@ -351,7 +352,7 @@ export function LogPanel({ height }: { height: number }) {
       <div ref={bodyRef} style={styles.body}>
         {displayItems.length === 0 ? (
           <span style={{ opacity: 0.4 }}>
-            {logFilter ? 'Nenhum log para este step.' : 'Aguardando execução...'}
+            {logFilter ? t('No logs for this step.') : t('Waiting for execution...')}
           </span>
         ) : (
           displayItems.map((item) => {
@@ -403,20 +404,20 @@ export function LogPanel({ height }: { height: number }) {
                         const isSearchMatch = normalizedSearch && stripAnsi(l.line).toLowerCase().includes(normalizedSearch);
                         const isActiveMatch = activeMatchId === l.id;
                         return (
-                      <div
-                        key={l.id}
-                        ref={(element) => setLineRef(lineRefs.current, l.id, element)}
-                        style={{
-                          ...styles.logLine,
-                          color,
-                          background: isActiveMatch ? '#d2992233' : isSearchMatch ? '#d2992218' : selectedTimelineLogId === l.id ? '#1f6feb22' : undefined,
-                          borderLeftColor: isActiveMatch ? '#d29922' : selectedTimelineLogId === l.id ? '#58a6ff' : 'transparent',
-                        }}
-                        onClick={() => restoreGraphAtLog(l.id)}
-                        title="Restaurar o grafo neste ponto do log"
-                      >
-                        {renderLogText(l.line, color)}
-                      </div>
+                          <div
+                            key={l.id}
+                            ref={(element) => setLineRef(lineRefs.current, l.id, element)}
+                            style={{
+                              ...styles.logLine,
+                              color,
+                              background: isActiveMatch ? '#d2992233' : isSearchMatch ? '#d2992218' : selectedTimelineLogId === l.id ? '#1f6feb22' : undefined,
+                              borderLeftColor: isActiveMatch ? '#d29922' : selectedTimelineLogId === l.id ? '#58a6ff' : 'transparent',
+                            }}
+                            onClick={() => restoreGraphAtLog(l.id)}
+                            title="Restaurar o grafo neste ponto do log"
+                          >
+                            {renderLogText(l.line, color)}
+                          </div>
                         );
                       })()
                     ))}

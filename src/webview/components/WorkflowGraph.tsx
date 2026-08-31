@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useExecutionStore, type GraphNode, type NodeStatus } from '../store/executionStore';
+import { t } from '../i18n';
 
 // ─── Status config ───────────────────────────────────────────────────────────
 
@@ -12,11 +13,11 @@ interface StatusConfig {
 }
 
 const STATUS: Record<NodeStatus, StatusConfig> = {
-  idle:    { border: '#30363d', bg: '#161b22',  iconColor: '#6e7681', icon: '○',  pulse: false },
-  running: { border: '#f97316', bg: '#1a0f00',  iconColor: '#fb923c', icon: '◉',  pulse: true  },
-  success: { border: '#238636', bg: '#0d2818',  iconColor: '#3fb950', icon: '✓',  pulse: false },
-  failed:  { border: '#da3633', bg: '#200d0d',  iconColor: '#f85149', icon: '✕',  pulse: false },
-  skipped: { border: '#484f58', bg: '#161b22',  iconColor: '#8b949e', icon: '⏭',  pulse: false },
+  idle: { border: '#30363d', bg: '#161b22', iconColor: '#6e7681', icon: '○', pulse: false },
+  running: { border: '#f97316', bg: '#1a0f00', iconColor: '#fb923c', icon: '◉', pulse: true },
+  success: { border: '#238636', bg: '#0d2818', iconColor: '#3fb950', icon: '✓', pulse: false },
+  failed: { border: '#da3633', bg: '#200d0d', iconColor: '#f85149', icon: '✕', pulse: false },
+  skipped: { border: '#484f58', bg: '#161b22', iconColor: '#8b949e', icon: '⏭', pulse: false },
 };
 
 const JOB_CARD_BG = '#161b22';
@@ -234,7 +235,7 @@ function OuterJobCard({
         {/* Duração à direita */}
         {isRunning && (
           <span style={{ fontSize: 10, color: cfg.iconColor, animation: 'actDotBlink 1s ease-in-out infinite', flexShrink: 0 }}>
-            em execução
+            {t('running')}
           </span>
         )}
         {outerJob.duration !== undefined && outerJob.duration > 0 && !isRunning && (
@@ -278,11 +279,11 @@ function OuterJobCard({
 
 // ─── Layout engine ───────────────────────────────────────────────────────────
 
-const CARD_W  = 300;  // largura fixa do card de job
-const HDR_H   = 50;   // altura do header (âncora vertical das setas)
+const CARD_W = 300;  // largura fixa do card de job
+const HDR_H = 50;   // altura do header (âncora vertical das setas)
 const COL_GAP = 48;   // espaço horizontal entre colunas
 const ROW_GAP = 56;   // espaço vertical entre linhas (breathing room entre chains)
-const PAD     = 32;   // padding do canvas
+const PAD = 32;   // padding do canvas
 
 interface Pos { x: number; y: number }
 
@@ -303,14 +304,14 @@ function computeDAGLayout(
   if (jobs.length === 0) return {};
 
   // ── 1. Coluna: profundidade máxima (BFS) ─────────────────────────────────
-  const col  = new Map<string, number>(jobs.map(j => [j.id, 0]));
+  const col = new Map<string, number>(jobs.map(j => [j.id, 0]));
   const inDeg = new Map<string, number>(jobs.map(j => [j.id, 0]));
-  const adj  = new Map<string, string[]>();  // arestas diretas
+  const adj = new Map<string, string[]>();  // arestas diretas
   const radj = new Map<string, string[]>();  // arestas inversas (predecessores)
 
   for (const { from, to } of deps) {
-    adj.set(from,  [...(adj.get(from)  ?? []), to]);
-    radj.set(to,   [...(radj.get(to)  ?? []), from]);
+    adj.set(from, [...(adj.get(from) ?? []), to]);
+    radj.set(to, [...(radj.get(to) ?? []), from]);
     inDeg.set(to, (inDeg.get(to) ?? 0) + 1);
   }
 
@@ -462,7 +463,7 @@ export function WorkflowGraph({ showHeader = true }: WorkflowGraphProps) {
 
   const outerJobs = nodes.filter((n) => n.type === 'job' && !n.parentId);
   const innerJobs = nodes.filter((n) => n.type === 'job' && !!n.parentId);
-  const steps     = nodes.filter((n) => n.type === 'step');
+  const steps = nodes.filter((n) => n.type === 'step');
 
   // Redução transitiva: apenas arestas essenciais (sem redundâncias transitivas)
   // DEVE vir antes do return condicional (Rules of Hooks)
@@ -509,9 +510,9 @@ export function WorkflowGraph({ showHeader = true }: WorkflowGraphProps) {
     return (
       <div style={styles.empty}>
         <div style={styles.emptyIcon}>▶</div>
-        <p style={{ fontWeight: 600, marginBottom: 4 }}>Nenhum workflow em execução</p>
+        <p style={{ fontWeight: 600, marginBottom: 4 }}>{t('No workflow running')}</p>
         <p style={{ fontSize: 12, color: '#6e7681' }}>
-          Selecione um workflow e clique em Executar para visualizar o progresso aqui.
+          {t('Select a workflow and click Run to view progress here.')}
         </p>
       </div>
     );
@@ -533,7 +534,7 @@ export function WorkflowGraph({ showHeader = true }: WorkflowGraphProps) {
   const allJobs = [...outerJobs, ...innerJobs];
   const runningCount = allJobs.filter(j => j.status === 'running').length;
   const successCount = allJobs.filter(j => j.status === 'success').length;
-  const failedCount  = allJobs.filter(j => j.status === 'failed').length;
+  const failedCount = allJobs.filter(j => j.status === 'failed').length;
 
   const handleCardMouseDown = (jobId: string, e: React.MouseEvent) => {
     dragMovedRef.current = false;
@@ -548,9 +549,9 @@ export function WorkflowGraph({ showHeader = true }: WorkflowGraphProps) {
         <div style={styles.header}>
           <span style={{ fontWeight: 600, color: '#e6edf3' }}>{execution.workflowName || 'Workflow'}</span>
           <div style={styles.summary}>
-            {runningCount > 0 && <span style={{ color: '#fb923c' }}>◉ {runningCount} em execução</span>}
-            {successCount > 0 && <span style={{ color: '#3fb950' }}>✓ {successCount} concluído{successCount > 1 ? 's' : ''}</span>}
-            {failedCount  > 0 && <span style={{ color: '#f85149' }}>✕ {failedCount} {failedCount > 1 ? 'falharam' : 'falhou'}</span>}
+            {runningCount > 0 && <span style={{ color: '#fb923c' }}>◉ {runningCount} {t('running')}</span>}
+            {successCount > 0 && <span style={{ color: '#3fb950' }}>✓ {successCount} {t('completed')}</span>}
+            {failedCount > 0 && <span style={{ color: '#f85149' }}>✕ {failedCount} {t('failed plural')}</span>}
             <span style={{ color: '#6e7681', fontSize: 11 }}>
               {allJobs.length} job{allJobs.length !== 1 ? 's' : ''} · {steps.length} step{steps.length !== 1 ? 's' : ''}
             </span>
@@ -587,7 +588,7 @@ export function WorkflowGraph({ showHeader = true }: WorkflowGraphProps) {
               // Dots ficam NA borda do card (port handle)
               // Stub horizontal sai do dot antes do bezier começar
               const DOT_R = 4;
-              const STUB  = 8;
+              const STUB = 8;
               const dot1x = src.x + CARD_W;            // dot na borda direita do card fonte
               const dot1y = src.y + HDR_H / 2;
               const dot2x = dst.x;                     // dot na borda esquerda do card destino
@@ -595,7 +596,7 @@ export function WorkflowGraph({ showHeader = true }: WorkflowGraphProps) {
               // Bezier parte do fim do stub source até o início do stub destino
               const bx1 = dot1x + STUB;
               const bx2 = dot2x - STUB;
-              const dx  = bx2 - bx1;
+              const dx = bx2 - bx1;
               const cpx1 = bx1 + dx * 0.45;
               const cpx2 = bx2 - dx * 0.45;
               const srcJob = outerJobs.find(j => j.id === e.source);

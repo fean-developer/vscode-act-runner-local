@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { t } from '../i18n';
 
 // Top-level tabs
 type MainTab = 'secrets' | 'variables' | 'actrc';
@@ -83,8 +84,8 @@ export function EnvEditor() {
   // Derived file tab based on navigation
   const fileTab: FileTab =
     mainTab === 'secrets' ? 'secrets' :
-    mainTab === 'actrc'   ? 'actrc' :
-    varsSubTab;
+      mainTab === 'actrc' ? 'actrc' :
+        varsSubTab;
 
   const [rows, setRows] = useState<EnvEntry[]>([]);
   const [loading, setLoading] = useState(false);
@@ -214,9 +215,9 @@ export function EnvEditor() {
         {/* Top nav tabs: Secrets | Variables | Args do ACT */}
         <div style={s.navTabs}>
           {([
-            { key: 'secrets',   label: 'Secrets' },
+            { key: 'secrets', label: 'Secrets' },
             { key: 'variables', label: 'Variables' },
-            { key: 'actrc',     label: 'Args do ACT' },
+            { key: 'actrc', label: 'Args do ACT' },
           ] as { key: MainTab; label: string }[]).map((t) => (
             <button
               key={t.key}
@@ -235,7 +236,7 @@ export function EnvEditor() {
             <div style={s.subTabs}>
               {([
                 { key: 'vars', label: '.vars' },
-                { key: 'env',  label: '.env'  },
+                { key: 'env', label: '.env' },
               ] as { key: VarsSubTab; label: string }[]).map((t) => (
                 <button
                   key={t.key}
@@ -307,8 +308,8 @@ export function EnvEditor() {
                     />
                     {config.isSecret && (
                       <p style={s.formHint}>
-                        ⚠️ Secrets nunca devem ser commitados. Verifique se{' '}
-                        <code style={s.code}>.secrets</code> está no{' '}
+                        ⚠️ {t('Secrets should never be committed. Make sure')} {' '}
+                        <code style={s.code}>.secrets</code> {t('is in')} {' '}
                         <code style={s.code}>.gitignore</code>.
                       </p>
                     )}
