@@ -31,11 +31,21 @@ jobs:
       - name: Run tests with coverage
         run: npm run test:coverage -- --runInBand
 
+      - name: Run lint
+        run: npm run lint
+
       - name: Run typecheck
         run: npm run typecheck
 
-      - name: Build extension
+      - name: Build extension with Webpack
         run: npm run build
+
+      - name: Build extension with Vite
+        run: npm run build:vite
+
+      - name: Run Extension Host smoke test
+        if: matrix.node-version == 22
+        run: xvfb-run -a npm run test:integration
 
       - name: Validate VSIX packaging
         run: npm run package -- --no-dependencies

@@ -1,6 +1,40 @@
 import { HistoryService } from '../core/historyService';
-import type { ExecutionRecord } from '../types/execution.types';
+import type { ExecutionGraphHistory, ExecutionGraphSnapshot, ExecutionRecord } from '../types/execution.types';
 import * as vscode from 'vscode';
+
+
+const makeGraphSnapshot = (summaryContent: string): ExecutionGraphSnapshot => ({
+  execution: {
+    executionId: 'exec-001',
+    status: 'success',
+    workflowName: 'CI Node.js',
+    workflowPath: '.github/workflows/ci.yml',
+    startedAt: '2026-01-01T00:00:00Z',
+    completedAt: '2026-01-01T00:01:00Z',
+    duration: 60_000,
+  },
+  nodes: [],
+  edges: [],
+  summaryContent,
+});
+
+const makeGraphHistory = (
+  summaryContent: string,
+  withTimeline = false
+): ExecutionGraphHistory => {
+  const snapshot = makeGraphSnapshot(summaryContent);
+  return {
+    final: snapshot,
+    timeline: withTimeline
+      ? [{
+          line: 'workflow completed',
+          level: 'info',
+          timestamp: '2026-01-01T00:01:00Z',
+          snapshot,
+        }]
+      : [],
+  };
+};
 
 describe('HistoryService', () => {
   let service: HistoryService;
@@ -114,4 +148,70 @@ describe('HistoryService', () => {
       expect.arrayContaining([expect.objectContaining({ id: 'exec-001' })])
     );
   });
+
+  it('stores graph history that arrives before the execution record', async () => {
+    const graphHistory: ExecutionGraphHistory = makeGraphHistory('summary', true);
+
+    await service.updateGraphHistory('exec-pending', graphHistory);
+
+    await service.save({ ...sample, id: 'exec-pending' });
+
+    expect(mockContext.workspaceState.update).toHaveBeenCalledWith(
+      'actRunner.executionHistory',
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'exec-pending',
+          graphHistory,
+        }),
+      ])
+    );
+  });
+
+  it('updates graph history for an existing record', async () => {
+    const graphHistory: ExecutionGraphHistory = makeGraphHistory('summary');
+    (mockContext.workspaceState.get as jest.Mock).mockReturnValue([sample]);
+
+    await service.updateGraphHistory('exec-001', graphHistory);
+
+    expect(mockContext.workspaceState.update).toHaveBeenCalledWith(
+      'actRunner.executionHistory',
+      [expect.objectContaining({ id: 'exec-001', graphHistory })]
+    );
+  });
+
+  it('filters by workflow path and start time together', () => {
+    const other = {
+      ...sample,
+      id: 'exec-002',
+      workflowPath: '.github/workflows/release.yml',
+      startedAt: '2024-01-02T10:00:00.000Z',
+    };
+    const later = {
+      ...sample,
+      id: 'exec-003',
+      startedAt: '2024-01-03T10:00:00.000Z',
+    };
+    (mockContext.workspaceState.get as jest.Mock).mockReturnValue([sample, other, later]);
+
+    expect(service.filter({
+      workflowPath: '.github/workflows/ci.yml',
+      since: '2024-01-02T00:00:00.000Z',
+    })).toEqual([later]);
+  });
+
+  it('compacts large log and graph summaries for the webview', () => {
+    const record: ExecutionRecord = {
+      ...sample,
+      logSummary: 'x'.repeat(40_100),
+      graphHistory: makeGraphHistory('y'.repeat(20_100), true),
+    };
+    (mockContext.workspaceState.get as jest.Mock).mockReturnValue([record]);
+
+    const [result] = service.getAllForWebview();
+
+    expect(result.logSummary).toContain('...[truncated for webview]');
+    expect(result.graphHistory?.final.summaryContent).toContain('...[truncated for webview]');
+    expect(result.graphHistory?.timeline).toEqual([]);
+  });
+
 });
